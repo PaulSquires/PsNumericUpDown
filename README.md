@@ -10,12 +10,16 @@ dividers.
 └───┴──────────┴───┘
 ```
 
-The thirteenth control in the family (`CListBox`, `CVScrollBar`, `CHScrollBar`, `CStatusBar`,
-`CTabBar`, `CTextBox`, `CMenuBar`, `CPopupMenu`, `CSplitter`, `CIconPanel`, `CSelectBar`,
-`CToggle`), and it follows the same template: one real `HWND`, per-instance state in a `TYPE`
-in the `CWindow` UserData area, one `WndProc`, host callbacks for painting and messages, one
-`CBufferPaint` per `WM_PAINT`, no host globals, rects derived and never set, programmatic
-setters silent.
+Another member of the owner-drawn control family (`CListBox`, `CVScrollBar`, `CHScrollBar`,
+`CStatusBar`, `CTabBar`, `CTextBox`, `CMenuBar`, `CPopupMenu`, `CSplitter`, `CIconPanel`,
+`CSelectBar`, `CToggle`, `CScrollPanel`, `CComboBox`), and it follows the same template: one
+real `HWND`, per-instance state in a `TYPE` in the `CWindow` UserData area, one `WndProc`, host
+callbacks for painting and messages, one `CBufferPaint` per `WM_PAINT`, no host globals, rects
+derived and never set, programmatic setters silent.
+
+*(Deliberately not numbered. Siblings are being added faster than any one repo's README learns
+about it — this file claimed "the thirteenth" while `CScrollPanel` was claiming the same
+ordinal in `CLAUDE.md`.)*
 
 **It is the third control that wraps a real child** (after `CListBox` and `CTextBox`), and the
 second that is focusable (after `CToggle`).

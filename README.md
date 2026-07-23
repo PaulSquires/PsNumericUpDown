@@ -1,8 +1,8 @@
 # CNumericUpDown
 
-A reusable owner-drawn **numeric up/down** (spinner) for FreeBASIC / Win32: a rounded frame
-holding a `−` button, an **editable** numeric field and a `+` button, separated by hairline
-dividers.
+An owner-drawn numeric up/down control — a spinner — for FreeBASIC Win32 applications: a
+rounded frame holding a `−` button, an editable numeric field and a `+` button, separated by
+hairline dividers.
 
 ```
 ┌───┬──────────┬───┐
@@ -10,41 +10,53 @@ dividers.
 └───┴──────────┴───┘
 ```
 
-Another member of the owner-drawn control family (`CListBox`, `CVScrollBar`, `CHScrollBar`,
-`CStatusBar`, `CTabBar`, `CTextBox`, `CMenuBar`, `CPopupMenu`, `CSplitter`, `CIconPanel`,
-`CSelectBar`, `CToggle`, `CScrollPanel`, `CComboBox`), and it follows the same template: one
-real `HWND`, per-instance state in a `TYPE` in the `CWindow` UserData area, one `WndProc`, host
-callbacks for painting and messages, one `CBufferPaint` per `WM_PAINT`, no host globals, rects
-derived and never set, programmatic setters silent.
+It is the control you reach for in a settings row, where the user picks a number and either
+nudges it a step at a time or types it outright. The value has a range, a settable number of
+decimal places and a settable increment; the buttons auto-repeat while held, the arrow keys,
+PgUp/PgDn and the mouse wheel all step it, and everything it draws is a colour you can set.
+There is no system control underneath the chrome, so nothing about its appearance depends on
+the visual style the user happens to be running.
 
-*(Deliberately not numbered. Siblings are being added faster than any one repo's README learns
-about it — this file claimed "the thirteenth" while `CScrollPanel` was claiming the same
-ordinal in `CLAUDE.md`.)*
+The field in the middle is a real editing control — a `CTextBox` in numeric mode, whose own
+child is a RichEdit. Typing, selection, the clipboard, paste validation, undo and the
+right-click menu all come from there rather than being reimplemented. That is what makes this
+control cheap to use, and it is what gives it the two obligations in the next section: three
+extra pairs of files, and one line in your message pump.
 
-**It is the third control that wraps a real child** (after `CListBox` and `CTextBox`) — and
-that position *is* load-bearing, because it is about shape. It is also one of the family's
-three focusable controls, with `CToggle`, which established the machinery, and `CComboBox`.
+The control has no caption. It draws only the frame, the two buttons and the number, so a
+label goes beside it, positioned by you.
 
-## Files
+---
 
-| File | Role |
+## Requirements
+
+**Files to copy into your project:**
+
+| File | Purpose |
 |---|---|
-| `CNumericUpDown.bi` | the control: defines, `NUD_*` enums, colours, paint/message info, callback typedefs, the `CNUMERICUPDOWN` type, `LayoutControl`, and the documented public API |
-| `CNumericUpDown.inc` | implementation: the built-in painter, the `WndProc`, `Create`, the three CTextBox hooks, and the API bodies |
-| `CTextBox.bi/.inc`, `CPopupMenu.bi/.inc`, `CBufferPaint.bi/.inc` | vendored copies, synced from their canonical repos — **do not edit them here** |
-| `main.bas`, `frmMain.bi/.inc` | demo harness — a settings pane of six spinners plus a plain CTextBox — and the self-test |
-| `main.rc`, `main_manifest.xml` | makes the demo DPI-aware. Not optional: measuring a GUI in a DPI-unaware process invalidates the measurement |
+| `CNumericUpDown.bi` | Declarations — types, callbacks, constants, function prototypes |
+| `CNumericUpDown.inc` | Implementation |
+| `CTextBox.bi` | The editing control used as the value field |
+| `CTextBox.inc` | Its implementation |
+| `CPopupMenu.bi` | The value field's right-click menu |
+| `CPopupMenu.inc` | Its implementation |
+| `CBufferPaint.bi` | The flicker-free drawing surface everything paints through |
+| `CBufferPaint.inc` | Its implementation |
 
-Build (the toolchain is not on `PATH`, and AfxNova resolves relative to the workspace root):
+An application that already hosts `CTextBox` or `CPopupMenu` has those files once already —
+they are the same files, and `#include once` means nothing is duplicated.
+
+**AfxNova is required.** The control is built on `CWindow`, `CTextBox` uses
+`AfxNova\AfxRichEdit.inc`, and `CBufferPaint` draws through `AfxNova\CGdiPlus.inc`. Sources
+include AfxNova relative to the workspace root (`#include once "AfxNova\CWindow.inc"`), so
+builds need the workspace root on the include path:
 
 ```bash
-C:\dev\tiko_editor\toolchains\FreeBASIC-1.10.1-winlibs-gcc-9.3.0\fbc64.exe -i "C:\dev" main.bas main.rc
+fbc64.exe -i "C:\dev" main.bas
 ```
 
-or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 54 assertions,
-geometry and value arithmetic.
-
-Include order — the price of embedding a real editing control:
+**Include order.** Each `.bi` pulls in what it needs, but the four implementation files must be
+included bottom-up:
 
 ```freebasic
 #include once "CBufferPaint.inc"
@@ -53,309 +65,724 @@ Include order — the price of embedding a real editing control:
 #include once "CNumericUpDown.inc"
 ```
 
-`CNumericUpDown.bi` includes both `CBufferPaint.bi` and `CTextBox.bi` itself, so it names no
-type it has not loaded — deliberately unlike `CListBox.bi`, which compiles only at an include
-site that has pre-loaded its siblings.
-
-## Quick start
+**GDI+ must be running before the first repaint and must outlive the last one.** The control
+renders all of its geometry through GDI+, so bracket your message loop:
 
 ```freebasic
-dim as HWND hSpin = CNumericUpDown_Create( hWndParent, IDC_MYSPINNER )
-
-CNumericUpDown_SetFont( hSpin, hMyFont )          ' you keep ownership
-CNumericUpDown_SetRange( hSpin, 6.0, 72.0 )
-CNumericUpDown_SetValue( hSpin, 16.0 )            ' silent: fires no callback
-CNumericUpDown_SetValueChangedCallback( hSpin, @MyValueChanged )
-
-' Size it to what the widest value in the range actually needs.
-dim as long iw, ih
-CNumericUpDown_GetIdealSize( hSpin, iw, ih )
-SetWindowPos( hSpin, 0, x, y, iw, ih, SWP_NOZORDER )
-ShowWindow( hSpin, SW_SHOW )
+dim as ULONG_PTR gdipToken = AfxGdipInit()
+' ... create windows, run the message loop ...
+AfxGdipShutdown( gdipToken )
 ```
 
-```freebasic
-sub MyValueChanged( byval hCtrl as HWND, byval nValue as double )
-    ' Only user action gets here.
-end sub
-```
+`AfxGdipShutdown` must come after every window is destroyed, because each repaint builds and
+tears down a `CBufferPaint`.
 
-**And one line in your message pump — this is not optional:**
+**Never name an identifier `ok`.** GDI+ defines `Ok = 0` as a `Status` enum value in namespace
+`AfxNova`, and hosts customarily say `using AfxNova`. An existing variable, parameter or
+function called `ok` becomes a duplicate definition the moment you adopt these files. Use
+`bOK` instead.
+
+### The pump call is mandatory
+
+**`CNumericUpDown_FilterMessage` is not optional.** The value field carries `CTextBox`'s
+built-in Cut / Copy / Paste / Select All right-click menu, which is a `CPopupMenu` and
+therefore not modal: its keyboard navigation and its dismissal on an outside click both live in
+a message filter.
 
 ```freebasic
-do while GetMessage(@uMsg, null, 0, 0)
+do while GetMessage( @uMsg, null, 0, 0 )
+    if uMsg.message = WM_QUIT then exit do
+
     if CNumericUpDown_FilterMessage( @uMsg ) then continue do
+
     TranslateMessage @uMsg
     DispatchMessage @uMsg
 loop
 ```
 
-See [The host obligation](#the-host-obligation) for why.
+Leave it out and the context menu still opens and still paints, but it cannot be driven from
+the keyboard and it never closes when the user clicks elsewhere. The function forwards to
+`CTextBox_FilterMessage`, so an application already calling that one is covered either way and
+calling both is harmless.
 
-## It wraps a real child
+### Tab navigation needs nothing from you
 
-The value field is a `CTextBox` in numeric mode, whose own child is a `RichEdit50W`. Typing,
-selection, the clipboard, undo, paste validation and the right-click menu all come from there
-— none of it is reimplemented.
+The control is focusable, and **Tab works without `IsDialogMessage` in your pump.** `CTextBox`
+handles `VK_TAB` itself, walking `GetAncestor( GA_ROOT )` and `GetNextDlgTabItem` to move the
+focus on. A host that does run `IsDialogMessage` is fine too — the two do not fight.
+
+What that walk needs is `WS_EX_CONTROLPARENT` on every window between the RichEdit and the
+top-level window. The container sets it on itself, which is the only reason tabbing works
+through the extra nesting level this control adds. Do not clear it.
+
+---
+
+## Quick start
+
+```freebasic
+' Create it. The control is created zero-sized and hidden.
+dim as HWND hSpin = CNumericUpDown_Create( hWndParent, IDC_MYFORM_LINEHEIGHT )
+CNumericUpDown_SetFont( hSpin, ghFont(GUIFONT_10) )
+
+' Be told when the user changes the value.
+CNumericUpDown_SetValueChangedCallback( hSpin, @MySpin_ValueChanged )
+
+' Shape the value. Every one of these is silent — none fires the callback above.
+' Set the decimal places and the range BEFORE the value: both of them rewrite
+' whatever is already there.
+CNumericUpDown_SetDecimalPlaces( hSpin, 2 )
+CNumericUpDown_SetRange( hSpin, 0.5, 3.0 )
+CNumericUpDown_SetIncrement( hSpin, 0.25 )        ' buttons, arrows, one wheel notch
+CNumericUpDown_SetLargeIncrement( hSpin, 1.0 )    ' PgUp / PgDn
+CNumericUpDown_SetValue( hSpin, 1.5 )
+
+' Ask how big it wants to be, then place it. GetIdealSize is valid immediately,
+' before the control has ever been sized.
+dim as long iw, ih
+CNumericUpDown_GetIdealSize( hSpin, iw, ih )
+SetWindowPos( hSpin, 0, x, y, iw, ih, SWP_NOZORDER )
+
+ShowWindow( hSpin, SW_SHOW )
+```
+
+And the callback:
+
+```freebasic
+sub MySpin_ValueChanged( byval hCtrl as HWND, byval nValue as double )
+    ' Fired only for user action. The value is already clamped, snapped and
+    ' displayed, so CNumericUpDown_GetValue( hCtrl ) = nValue.
+    gConfig.LineHeight = nValue
+end sub
+```
+
+That, plus the `CNumericUpDown_FilterMessage` line in your pump, is the whole minimum.
+Everything below is refinement.
+
+---
+
+## Concepts
+
+### The handle is a real HWND
+
+`CNumericUpDown_Create` returns an ordinary window handle, and every `CNumericUpDown_*`
+function takes it. It is not an opaque type, so you can treat the control as the window it is —
+`SetWindowPos` to place and size it, `ShowWindow` to show it, `GetDlgItem` to find it by the
+`CtrlID` you passed at creation.
+
+### It is created zero-sized and hidden
+
+`CNumericUpDown_Create` gives the container the styles `WS_CHILD`, `WS_CLIPSIBLINGS` and
+`WS_CLIPCHILDREN`, plus the extended style `WS_EX_CONTROLPARENT`. `WS_VISIBLE` is deliberately
+absent, so a newly created control shows nothing until you size it and call `ShowWindow`. That
+lets you build and configure a control before it is ever seen.
+
+The container itself is **not** a tabstop; the RichEdit inside it is.
+
+### The value field is an embedded CTextBox
+
+The window tree is three deep:
 
 ```
 CNumericUpDown container      WS_EX_CONTROLPARENT
-  └── CTextBox                borderless: THIS control owns all the chrome
-        └── RichEdit50W       WS_TABSTOP — the real focus target
+  +-- CTextBox                borderless: this control owns all the chrome
+        +-- RichEdit50W       WS_TABSTOP — the real focus target
 ```
 
-What that buys, and what it costs:
+The `CTextBox` is created borderless, in numeric mode, centred, with its margins taken from the
+value padding and with "an empty buffer reads as zero" turned on.
+`CNumericUpDown_GetTextBoxHandle` is the escape hatch: every `CTextBox_*` setter applies to it —
+cue banner, text limit, context-menu theming, and so on.
 
-| | |
+**Three `CTextBox` setters are owned by this control and must not be set behind its back:**
+
+| Setter | Why not |
 |---|---|
-| **Buys** | the numeric grammar (digits, one leading minus, one separator — typed *or pasted*), decimal places with reformat-on-focus-loss, `GetValue`/`SetValue` as a `double`, a caret and a selection, Cut/Copy/Paste/Select All |
-| **Costs** | three vendored files instead of one, a message-pump obligation, and focus that lives two levels down |
+| `CTextBox_SetValue` | Use `CNumericUpDown_SetValue`, or the committed value and the buttons' at-a-limit state go stale |
+| `CTextBox_SetDecimalPlaces` | Use `CNumericUpDown_SetDecimalPlaces`, for the same reason |
+| `CTextBox_SetBorderWidth` | Anything nonzero draws a second frame inside this control's own |
 
-`CNumericUpDown_GetTextBoxHandle` is the escape hatch — every `CTextBox_*` setter applies to
-it (cue banner, limit text, context-menu theming). **Three are owned by this control** and
-must not be set behind its back: `CTextBox_SetValue` / `SetDecimalPlaces` (use ours, or the
-cached value and the buttons' limit state go stale) and `CTextBox_SetBorderWidth` (nonzero
-would draw a second frame inside ours).
+### Focus lives two levels down
 
-### The two gaps embedding creates, and how each is closed
+**`GetFocus() = hCtrl` is never true.** Keyboard focus sits on the RichEdit, two windows below
+the handle you hold, so the obvious test always answers FALSE. Use
+`CNumericUpDown_HasFocus( hCtrl )`, which asks the right window.
 
-**CTextBox had no alignment API** — its text was left-aligned against the margin, and the
-number here is centred. It has one now: `CTextBox_SetTextAlign`, added upstream for this
-control and called once at Create, while the buffer is still empty.
+`SetFocus( hCtrl )` does work and means what you expect — the container hands the focus straight
+down to the RichEdit rather than swallowing it.
 
-That timing is not incidental. Applying alignment **rewrites the CTextBox buffer** and
-discards its undo history, because `TM_PLAINTEXT` refuses `EM_SETPARAFORMAT` outright — see
-CTextBox's own README. At Create there is nothing to discard.
+Focus is shown by recolouring the frame in `FocusBorderColor`. There is no separate focus ring
+and therefore no reserved ring band, so **the control's ideal size does not change when focus
+arrives** and nothing shifts sideways when you Tab onto it.
 
-This replaced an earlier version that sent `EM_SETPARAFORMAT` at the RichEdit directly
-through the documented escape hatch. That version **did not work and reported no error**: the
-message was refused every single time and the number was never centred. It was written, shipped
-in a first commit, and flagged as the highest-risk unverified item — and it took an assertion
-that *asked the RichEdit* rather than trusting the control's own stored state to expose it.
+Arriving by Tab selects the whole number, so the first keystroke replaces it. Arriving by
+clicking a button deliberately does not, so the number is not left highlighted after every click
+of `+`.
 
-**CTextBox has no enabled state.** `CNumericUpDown_SetEnabled` calls `EnableWindow` on the
-container **and** on the CTextBox, so the disable is enforced by the system rather than being
-a cosmetic flag — disabling only the container would leave the textbox itself enabled and a
-programmatic `SetFocus` could still drop a caret into a control that looks dead.
+### Geometry is derived, never assigned
 
-## The layout
-
-Everything derives from the client rect plus a few authored scalars. `LayoutControl()` is the
-only producer; painting, the child's placement and every rect query consume it.
+The control computes nine rectangles and owns all nine. You influence them through the layout
+setters; you never write them.
 
 ```
-  rcFrame  = the whole client
-  rcMinus  = client.left ..              client.left + nButtonWidth
-  rcDiv1   = rcMinus.right ..            + nDividerThick
-  rcPlus   = client.right - nButtonWidth .. client.right
-  rcDiv2   = rcPlus.left - nDividerThick .. rcPlus.left
-  rcValue  = rcDiv1.right ..             rcDiv2.left      ← the CTextBox sits exactly here
+  rcFrame  = the whole client (the rounded border is stroked INSIDE it, over the cells)
+
+  rcMinus  = client.left ..                  client.left + buttonWidth
+  rcDiv1   = rcMinus.right ..                + dividerThickness
+  rcPlus   = client.right - buttonWidth ..   client.right
+  rcDiv2   = rcPlus.left - dividerThickness .. rcPlus.left
+  rcValue  = rcDiv1.right .. rcDiv2.left,    inset top and bottom by borderThickness
+
+  rcMinusBar = glyphLength    x glyphThickness, centred in rcMinus
+  rcPlusBarH = glyphLength    x glyphThickness, centred in rcPlus
+  rcPlusBarV = glyphThickness x glyphLength,    centred in rcPlus
 ```
 
-**The cells are not deflated by the border**, and that is deliberate: the button fills have to
-reach the frame's rounded corners, and a cell inset by the border width would round its own
-corners a pixel inside the frame's, leaving a sliver of the base fill showing whenever a
-hovered button's colour differs from it. The border is stroked *over* the cells' outer edges,
-last.
+Two things in there are worth knowing before you write a paint callback:
 
-**`rcValue` alone is inset vertically**, by exactly the border thickness. The child covers
-every pixel of that rect and paints its own background — a full-height value cell would put
-the child on top of the frame's top and bottom rows and the border would be interrupted across
-the middle of the control. Nothing else is covered by a child, so nothing else needs it.
+**The cells are not deflated by the border.** The button cells span the full client height and
+reach the client edge, and the frame's outline is stroked over their outer edges last. A cell
+inset by the border width would round its own corners a pixel inside the frame's, leaving a
+sliver of the base fill showing through whenever a hovered button's colour differs from it.
 
-Overflow is computed honestly and clipped, never squeezed: too narrow and the value cell
-collapses to zero width (the child is hidden rather than handed a degenerate rect) while the
-buttons keep their size.
+**`rcValue` alone is inset, and only vertically, by exactly the border thickness.** It is the
+one rect a child window covers: the `CTextBox` sits exactly on it and paints its own background
+there, so a full-height value cell would put the child on top of the frame's top and bottom rows
+and the border would be interrupted across the middle of the control.
 
-`LayoutControl` takes **no DC** — every number is authored or derived. `GetIdealSize` is the
-one place this control measures anything, and it opens its own DC, which is what makes it
-valid *before* the control has ever been sized.
+Both `+` bars are centred on the same cell centre rather than one being derived from the other,
+so the cross is exactly symmetric whatever the parity of the cell and the bar.
 
-All setters take **raw pixels**; the caller DPI-scales. Only the Create-time defaults are
-scaled for you. The **border** and **divider** thicknesses are never scaled at all, because a
-hairline should stay a hairline — but the **glyph** thickness is, and that asymmetry is
-deliberate. Those two are *rules*; the `−` and `+` bars are the strokes of an *icon*, and
-scaling an icon's length but not its weight makes it thinner relative to itself at every step
-up in DPI. At 1.75× the unscaled version was 18 px long and 1 px thick, which read as a thread
-rather than a minus sign.
+Layout is lazy. A setter marks the layout stale and asks for a repaint; the next paint — or any
+rect query — recomputes it. There is no begin-update / end-update pair to remember, and setting
+six properties in a row costs one layout pass, not six.
 
-## Rendering
+Laying out takes no device context. Nothing in the cells is measured — every number is either
+authored or derived from the client rect, and the number on screen is measured by the RichEdit.
+`CNumericUpDown_GetIdealSize` is the one place this control measures anything, and it opens its
+own DC to do it.
 
-`CNumericUpDown_RenderDefault` draws through `CBufferPaint`. **The paint order is
-load-bearing**, and it is what keeps the corners round:
+### The ideal size is measured from the range
 
-| # | what | how |
-|---|---|---|
-| 1 | the client | `PaintClientRect` in `BackColor` — shows through outside the rounded corners |
-| 2 | the frame's fill | `PaintRoundRect(rcFrame)` — this is what makes the corners round, and it is also the value cell's background for the strip above and below the child |
-| 3 | each button cell | `PaintRoundRect` on the cell **extended inward past the divider**. A plain rectangular fill would square off the two corners it covers; extending it puts its own unwanted inner rounding somewhere harmless |
-| 4 | dividers and glyphs | `PaintRect` — filled rectangles, not lines. An antialiased 1px axis-aligned rule comes out grey and blurry, and a stated extent sidesteps both the smoothing and the endpoint-inclusion question |
-| 5 | the frame outline | `PaintRoundOutline`, **not** `PaintRoundBorderRect` — a filled round rect here would erase steps 2–4 |
+`CNumericUpDown_GetIdealSize` formats **both ends of the range** at the current decimal places,
+measures them in the current font, takes the wider, and adds the padding, both buttons, both
+dividers and the border:
 
-Curvature is a **diameter** in this API (`CBufferPaint` halves it to a GDI+ radius
-internally), so the corner radius is doubled at every call site.
+```
+  width  = 2*buttonWidth + 2*dividerThickness + padLeft + padRight + widestValueText
+  height = fontHeight + 2*vertPadding + 2*borderThickness
+```
 
-**It never draws the number.** The RichEdit paints that over `rcValue` afterwards — and
-because the container is `WS_CLIPCHILDREN`, the child's rect is excluded from our DC anyway,
-so anything drawn there is discarded rather than fighting for the pixels. A paint callback
-replaces the frame, the cells, the dividers and the glyphs; it does not and cannot replace the
-value.
+Both ends, because `-1000` is wider than `999` and a range that never goes negative should not
+pay for a minus sign it will never draw. Because it measures rather than consulting the layout,
+it is **valid before the control has ever been sized** — which is exactly when a host calls it.
 
-## Colours
+### Pixels, and who scales them
 
-`CNUMERICUPDOWN_COLORS` is a flat struct of `COLORREF` fields with defaults. Read-modify-write
-is Get, assign, Set.
+Only the creation-time defaults are DPI-scaled for you:
 
-**The control reads as one flat cell until you hover a button**, because `ButtonBackColor`
-defaults *equal to* `ValueBackColor` — CSelectBar's trick applied the other way round, and it
-is what makes the dividers the only thing separating the three parts at rest. A host that
-wants visibly raised buttons just sets the field.
+| Setting | Default | DPI-scaled at create? |
+|---|---:|---|
+| Button width | 28 | Yes |
+| Value padding, left and right | 6 | Yes |
+| Vertical padding | 5 | Yes |
+| Corner radius | 6 | Yes |
+| Glyph length | 10 | Yes |
+| Glyph thickness | 1 | **Yes** |
+| Border thickness | 1 | **No** |
+| Divider thickness | 1 | **No** |
 
-The value cell's two colours live in this struct but are pushed into the CTextBox, because the
-RichEdit draws the number. That bridge is the only reason a host does not have to set colours
-in two places.
+Every setter afterwards takes raw pixels and expects **you** to scale — typically
+`pWindow->ScaleX(...)` / `ScaleY(...)`.
 
-## Value behaviour
+**The glyph thickness is scaled and the two hairlines are not, and the asymmetry is
+deliberate.** The border and the divider are *rules*, and a rule that thickens with the display
+stops reading as a rule. The bars of the `−` and the `+` are not rules, they are the strokes of
+an *icon*: scale an icon's length but not its weight and it grows thinner relative to itself at
+every step up in DPI, until the minus sign reads as a thread rather than a glyph.
 
-| | |
+### Stepping, clamping and the decimal grid
+
+Every step — button, arrow key, PgUp/PgDn, wheel, `StepUp`/`StepDown`, `SetValue` — goes through
+the same two operations, in this order:
+
+1. **Snapped to the decimal grid**, not merely rounded for display. Adding `0.1` ten times to a
+   binary double lands on `0.9999999999999999`, and a value a hair below the grid formats
+   correctly while comparing wrong — so the drift would stay invisible until a range check at a
+   limit disagreed with the number on screen.
+2. **Clamped into `[min, max]`. The range clamps; it never wraps.** A button that can no longer
+   move the value paints disabled while the rest of the control stays live.
+
+A step starts from **what is in the field**, not from the last committed value, so typing `50`
+and then clicking `+` gives you `51`. Out-of-range typed text is clamped on the way in, so a
+step always starts from a legal value.
+
+### Who notifies, and when
+
+This is the part most worth reading twice. The change callback reports **user** action only, and
+the timing differs by input:
+
+| Input | When `ValueChangedCallback` fires |
 |---|---|
-| **Range** | `SetRange(min, max)`, clamping, no wrap. An inverted pair is swapped rather than accepted |
-| **At a limit** | the button that can do nothing is painted disabled, and auto-repeat stops dead there |
-| **Decimal grid** | every step is snapped back onto the decimal grid, not merely formatted for display. Adding 0.1 ten times to a binary double lands on 0.9999999999999999 — a value a hair below the grid formats correctly while comparing wrong, so the drift stays invisible until a range check disagrees with the number on screen |
-| **Increments** | added, never snapped to a multiple of the increment (classic spinner behaviour) |
-| **Empty** | reads as 0 and is then clamped into the range, so the control can never be left blank. There is no "no value" state |
+| `−` or `+` button click | Immediately — the step happens on the button-**down** |
+| Auto-repeat tick | Immediately, once per step |
+| Up / Down arrow in the field | Immediately |
+| PgUp / PgDn in the field | Immediately |
+| Mouse wheel | Immediately, once accumulated deltas complete a whole notch |
+| Typing | **On commit only** — ENTER, or focus leaving the field |
+| `SetValue`, `SetRange`, `SetDecimalPlaces`, `StepUp`, `StepDown` | **Never** |
 
-### When the change callback fires
+Typing `16` therefore never reports the transient `1`. Commit is also when the typed text is
+clamped, snapped and reformatted, which is what turns `5.` into `5.00`.
 
-**Immediately** for a button click, an auto-repeat tick, an arrow key, PgUp/PgDn and the wheel
-— each of those produces a complete value.
+Because every programmatic setter is silent, it is safe to call one from inside your own change
+handler without recursing. This follows Win32's own `BM_SETCHECK` / `BN_CLICKED` split.
 
-**On commit only** for typing: ENTER, or focus leaving the field, which is also when the typed
-text is clamped and reformatted. Typing `16` therefore never reports the transient `1`.
+`CNumericUpDown_GetValue` returns the **committed** value. While the user is mid-typing it still
+reports the last committed number, and so does the buttons' at-a-limit appearance — they still
+*step* correctly from what was typed.
 
-**Never** for `SetValue`, `SetRange`, `SetDecimalPlaces`, `StepUp` or `StepDown`. They are
-programmatic setters, which is Win32's own `BM_SETCHECK`/`BN_CLICKED` split and what makes it
-safe to call one from inside the handler.
+### How a button press works
 
-## Focus and keyboard
+**The value steps on the button-down, not on the release.** It has to: auto-repeat must start
+from somewhere, and a first step deferred to the release would arrive after the repeats it
+precedes. Every real spinner behaves this way, and it means **sliding off a button does not undo
+the step that already happened.**
 
-- Focus sits on the RichEdit two levels down, so `GetFocus() = hCtrl` is **always** false —
-  use `CNumericUpDown_HasFocus()`.
-- The frame recolours to `FocusBorderColor`. There is no separate focus ring and therefore no
-  reserved band, so the ideal size does not change when focus arrives.
-- **Tab navigation works without `IsDialogMessage`**, because CTextBox handles `VK_TAB` itself
-  by walking `GetAncestor(GA_ROOT)` + `GetNextDlgTabItem`. That walk only sees through a
-  container that declares itself one, which is why this control's container carries
-  `WS_EX_CONTROLPARENT` — it is load-bearing, not decoration. The demo deliberately omits
-  `IsDialogMessage` from its pump to prove it.
-- **Tab in and the number is selected**, so the first keystroke replaces it. **A button click
-  focuses the field without selecting**, placing the caret instead — otherwise every click of
-  `+` would leave the number highlighted. Toggling CTextBox's flag around the `SetFocus` is
-  safe rather than a timing gamble, because CTextBox applies select-on-focus synchronously
-  inside its own `WM_SETFOCUS`.
-- **Up/Down** step by the increment, **PgUp/PgDn** by the large increment. They are free to
-  claim: a single-line RichEdit does nothing useful with them.
-- **Home and End are deliberately not claimed.** They move the caret to the start and end of
-  the text, and stealing them for min/max would break ordinary editing in a field the user can
-  type into.
-- **The wheel** steps one increment per notch, accumulating sub-notch deltas so a slow
-  trackpad swipe is not ignored. `SPI_GETWHEELSCROLLLINES` is deliberately *not* consulted,
-  which is where this parts company with the scrollbars: "how many lines does one notch
-  scroll" is a question about a view, and this is a value.
+The control takes mouse capture for the press anyway, and what capture buys here is the repeat,
+not a press/cancel gesture:
+
+- the repeat stops the moment the cursor leaves the button, and resumes — after the full delay
+  again, so a wobbling cursor cannot machine-gun the value — if it comes back;
+- the up-message is guaranteed to arrive, wherever the cursor has wandered to, so the repeat
+  timer can never outlive the gesture.
+
+Repeating starts after `nDelayMs` and then ticks every `nIntervalMs`. **It stops dead when the
+value reaches a limit** rather than spinning against the clamp. Either timing value at or below
+zero disables repeating entirely: one click, one step.
+
+### The wheel steps by one increment per notch
+
+Sub-notch deltas accumulate, so a slow precision-touchpad swipe is not truncated away to
+nothing. `SPI_GETWHEELSCROLLLINES` is deliberately **not** consulted — "how many lines does one
+notch scroll" is a question about scrolling a view, and this is a value, not a view. One notch
+is one increment, and you control the feel through `CNumericUpDown_SetIncrement`.
+
+Wheel messages go to the *focused* window, so most of them arrive at the RichEdit. The container
+catches the other case: Windows' "scroll inactive windows" setting, on by default, delivers the
+wheel to whatever is under the cursor, which is the container when the pointer is over a button.
+
+### Enabling, disabling and read-only
+
+They are different statements, and both are available.
+
+`CNumericUpDown_SetEnabled( hCtrl, false )` calls `EnableWindow` on **both** the container and
+the `CTextBox`. A disabled window receives no mouse input at all, and disabling only the
+container would leave the field itself enabled, where a programmatic `SetFocus` could still drop
+a caret into a control that looks dead. If you call `EnableWindow` on the control directly, the
+control notices and greys itself, so the two routes cannot disagree.
+
+`CNumericUpDown_SetReadOnly( hCtrl, true )` stops **typing only**. The buttons, the arrow keys,
+PgUp/PgDn and the wheel all keep working. It says "you may not type an arbitrary number here",
+which is not the same as "this control is inert".
+
+### Lifetime
+
+The control frees itself when its window is destroyed, taking the `CTextBox` with it. It owns no
+host resources — in particular the font is caller-owned and is never deleted. Destroy the parent
+and you are done.
+
+---
+
+## Behaviour and limits
+
+Firm properties of the control, not settings:
+
+- **The pump call is mandatory.** Without `CNumericUpDown_FilterMessage`, the value field's
+  right-click menu has no keyboard navigation and never closes on an outside click.
+- **`GetFocus() = hCtrl` is never true.** Focus lives on the RichEdit two levels down; use
+  `CNumericUpDown_HasFocus`.
+- **`WS_EX_CONTROLPARENT` on the container is load-bearing.** `CTextBox`'s own `VK_TAB` walk
+  only sees through a container that declares itself one, so clearing it breaks tabbing into and
+  out of the value field.
+- **The range clamps; it never wraps.** A button at a limit paints disabled, and auto-repeat
+  stops there.
+- **Every step snaps to the decimal grid**, not just on display.
+- **The control can never be blank.** With a range there is no "no value" state to represent, so
+  an empty field reads as zero and is then clamped.
+- **The step happens on the button-down.** Pressing a button and sliding off before releasing
+  does not undo it.
+- **Double-clicks are not special.** `CS_DBLCLKS` is deliberately off, so a rapid second click
+  arrives as an ordinary down/up pair and steps again. With it on, the second of two rapid
+  clicks would arrive as `WM_LBUTTONDBLCLK` and a user double-clicking `+` to add two would get
+  one.
+- **Home and End are not claimed.** They move the caret to the start and end of the text.
+  Stealing them for min/max would break ordinary editing in a field the user can type into.
+- **The value cell is reported by `HitTest` but never acted on.** That area is covered by the
+  `CTextBox` child, which receives its own mouse messages and never routes them to the
+  container, so in practice only `NUD_PART_MINUS` and `NUD_PART_PLUS` are reachable through a
+  real mouse message.
+- **No tooltip support.** There is no tooltip callback and no tooltip window is created. If you
+  want a tip, add your own tool over the control's `HWND`.
+- **The right mouse button is reported by the container, never acted on.** The value field has
+  its own context menu; the buttons have none, and inventing one is your business. No capture is
+  taken for the right button, so a right-up can arrive without a matching down.
+- **When the control is too narrow for both buttons and both dividers, the value cell collapses
+  to zero width and the buttons keep their size, clipping at the client edge.** Rects are
+  computed honestly rather than squeezed, so the buttons stay square and only what is past the
+  edge is lost. `rcValue` is never allowed to invert, and a collapsed value cell hides the child
+  rather than handing it a degenerate rect.
+- **A paint callback replaces the frame, the cells, the dividers and the glyphs — never the
+  number.** The RichEdit paints that over `rcValue` afterwards, whatever the callback drew
+  there, and `WS_CLIPCHILDREN` keeps the child's rect out of the callback's DC anyway.
+- **A primitive that fills a rect covering the whole control erases everything under it.** See
+  the warning under [Paint](#paint).
+
+---
+
+## API reference
+
+### Creation
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_Create( hWndParent, CtrlID ) as HWND` | Creates the control as a child of `hWndParent` and returns its window handle. `CtrlID` becomes the window's `GWLP_ID`, so `GetDlgItem` finds it. Created zero-sized and hidden — size it with `CNumericUpDown_GetIdealSize`, place it with `SetWindowPos`, then `ShowWindow`. |
+| `CNumericUpDown_HasFocus( hCtrl ) as boolean` | TRUE while the value field owns the keyboard focus. **Use this, not `GetFocus`** — focus sits on the RichEdit two levels down, so `GetFocus() = hCtrl` is always FALSE. |
+| `CNumericUpDown_GetEnabled( hCtrl ) as boolean` | The control's enabled state. |
+| `CNumericUpDown_SetEnabled( hCtrl, isEnabled )` | Enables or disables through `EnableWindow`, on the container **and** on the embedded `CTextBox`, so input really stops and no `SetFocus` can sneak in. Disabling clears any hover and cancels a live press and its repeat. Does not change the value. |
+| `CNumericUpDown_Refresh( hCtrl )` | Marks the layout stale, requests a repaint with background erase, and re-places the child. Rarely needed — every setter does this for you. |
+| `CNumericUpDown_FilterMessage( pMsg as MSG ptr ) as boolean` | **Call this in your message pump.** Returns TRUE when the message was consumed by the value field's context menu, in which case skip `TranslateMessage`/`DispatchMessage` for it. Forwards to `CTextBox_FilterMessage`, so calling both is harmless. |
+
+### Value and range
+
+Every setter here is **silent** — none fires the change callback.
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_GetValue( hCtrl ) as double` | The **committed** value. While the user is mid-typing this is still the last committed number. |
+| `CNumericUpDown_SetValue( hCtrl, nValue )` | Snaps to the decimal grid, clamps into the range, displays it and records it. What you set is what `GetValue` returns and what is on screen. |
+| `CNumericUpDown_GetRange( hCtrl, byref nMin, byref nMax )` | The current range. |
+| `CNumericUpDown_SetRange( hCtrl, nMin, nMax )` | Sets the range. **An inverted pair is swapped, not rejected** — the alternative is a control whose clamp can never be satisfied and that pins to the minimum on every step. Re-clamps the current value, silently. |
+| `CNumericUpDown_GetDecimalPlaces( hCtrl ) as long` | Digits after the decimal point; `0` means integers only. |
+| `CNumericUpDown_SetDecimalPlaces( hCtrl, nPlaces )` | Sets the grid the value snaps to and the format it displays in. A negative count is floored at 0. Re-snaps the current value onto the new grid, silently — `16.25` at 2 places becomes `16` at 0. Reaches the embedded `CTextBox` too, which is what makes the field **refuse a typed decimal separator outright at 0 places**. |
+
+Set the decimal places and the range **before** the value: each of them rewrites whatever is
+already there.
+
+### Stepping
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_GetIncrement( hCtrl ) as double` | The step used by the buttons, the Up/Down arrows and one wheel notch. Default 1. |
+| `CNumericUpDown_SetIncrement( hCtrl, nIncrement )` | Sets it. **Takes the magnitude** — a negative increment is stored as its absolute value, so `−` always goes down. |
+| `CNumericUpDown_GetLargeIncrement( hCtrl ) as double` | The step used by PgUp and PgDn. Defaults to ten times the increment default. |
+| `CNumericUpDown_SetLargeIncrement( hCtrl, nIncrement )` | Sets it; also takes the magnitude. |
+| `CNumericUpDown_StepUp( hCtrl )` | Adds one increment to whatever is in the field, snapped and clamped. The programmatic door to exactly what the `+` button does — **minus the notification**. |
+| `CNumericUpDown_StepDown( hCtrl )` | The same, downwards. Also silent. |
+| `CNumericUpDown_GetAutoRepeat( hCtrl, byref nDelayMs, byref nIntervalMs )` | The hold-to-repeat timings, in milliseconds. Defaults 400 and 60. |
+| `CNumericUpDown_SetAutoRepeat( hCtrl, nDelayMs, nIntervalMs )` | Sets them. **Either value at or below zero disables repeating** (one click, one step) and stops any repeat already running. Repeating also stops on its own the moment the value reaches a limit. |
+
+### The value field
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_GetTextBoxHandle( hCtrl ) as HWND` | The embedded `CTextBox`, so any `CTextBox_*` setter can be applied to it — cue banner, text limit, context-menu theming. **Do not call `CTextBox_SetValue`, `CTextBox_SetDecimalPlaces` or `CTextBox_SetBorderWidth` on it**: the first two go stale against this control's committed value, and the third draws a second frame inside this one's. |
+| `CNumericUpDown_GetReadOnly( hCtrl ) as boolean` | TRUE when typing is blocked. |
+| `CNumericUpDown_SetReadOnly( hCtrl, bReadOnly )` | Blocks **typing only**. The buttons, the arrow keys, PgUp/PgDn and the wheel keep working. For a genuinely inert control use `CNumericUpDown_SetEnabled`. |
+| `CNumericUpDown_GetFont( hCtrl ) as HFONT` | The font the value is drawn in. |
+| `CNumericUpDown_SetFont( hCtrl, hFont )` | Hands the font to the `CTextBox` and re-lays-out. **Caller-owned** — the control converts nothing and deletes nothing, so you keep ownership of the `HFONT` and must free it yourself. This font is also what `GetIdealSize` measures in; with none set it measures in `DEFAULT_GUI_FONT`. |
+
+### Geometry and layout
+
+All setters take **raw pixels**; you do the DPI scaling. Each marks the layout stale and requests
+a repaint.
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_GetButtonWidth( hCtrl ) as long` | The width of each of the two button cells. |
+| `CNumericUpDown_SetButtonWidth( hCtrl, nWidth )` | Sets it; clamped to a minimum of 0. Both buttons share one width. |
+| `CNumericUpDown_GetValuePadding( hCtrl, byref nLeft, byref nRight, byref nVert )` | The text margins inside the value cell, and the vertical padding. |
+| `CNumericUpDown_SetValuePadding( hCtrl, nLeft, nRight, nVert )` | Each clamped to a minimum of 0. `nLeft`/`nRight` are real text margins, pushed into the field. **`nVert` is used only by `GetIdealSize`**, to decide the height around one line of text — it insets nothing. |
+| `CNumericUpDown_GetCornerRadius( hCtrl ) as long` | The frame's corner radius. |
+| `CNumericUpDown_SetCornerRadius( hCtrl, nRadius )` | Sets it; clamped to a minimum of 0, where **0 gives square corners**. |
+| `CNumericUpDown_GetBorderThickness( hCtrl ) as long` | The frame outline's thickness. |
+| `CNumericUpDown_SetBorderThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 means no frame at all**. This value also insets the value cell vertically, so changing it moves the child. Do not DPI-scale it. |
+| `CNumericUpDown_GetDividerThickness( hCtrl ) as long` | The hairline between each button and the value cell. |
+| `CNumericUpDown_SetDividerThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 draws no dividers** — and, being zero-width, takes no space either, since the cells and dividers tile the client width exactly. Do not DPI-scale it. |
+| `CNumericUpDown_GetGlyphSize( hCtrl, byref nLength, byref nThickness )` | The bar of the `−` (and each bar of the `+`), and its stroke weight. |
+| `CNumericUpDown_SetGlyphSize( hCtrl, nLength, nThickness )` | Sets both; **each floored at 1**, so a degenerate glyph becomes a 1×1 dot rather than nothing at all. Unlike the two hairlines, this thickness **should** be DPI-scaled — it is an icon stroke. |
+| `CNumericUpDown_GetIdealSize( hCtrl, byref nWidth, byref nHeight )` | The size that fits the widest value the range can produce at the current decimal places, in the current font, plus the padding, both buttons, both dividers and the border. Measures both ends of the range. Opens its own DC, so it is **valid before the control has ever been sized**. |
+| `CNumericUpDown_GetFrameRect( hCtrl, byref rc ) as boolean` | The frame — the whole client area. |
+| `CNumericUpDown_GetMinusRect( hCtrl, byref rc ) as boolean` | The `−` button cell. Spans the full client height: the cells are not deflated by the border. |
+| `CNumericUpDown_GetValueRect( hCtrl, byref rc ) as boolean` | The value cell — where the `CTextBox` child sits exactly. The one rect inset by the border, and only vertically. |
+| `CNumericUpDown_GetPlusRect( hCtrl, byref rc ) as boolean` | The `+` button cell. |
+| `CNumericUpDown_HitTest( hCtrl, pt ) as long` | Which `NUD_PART_*` is under a point in **client** coordinates, or `NUD_PART_NONE` outside the cells. `NUD_PART_VALUE` is reported for completeness; the control never acts on it. |
+
+The four rect queries force any pending layout first, so their results are always current. Each
+returns FALSE — leaving `rc` empty — when the control has no client area yet, which is the case
+between `CNumericUpDown_Create` and the first `SetWindowPos`.
+
+### Appearance
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_GetColors( hCtrl, pColors as CNUMERICUPDOWN_COLORS ptr )` | Fills your struct with the control's current colours. |
+| `CNumericUpDown_SetColors( hCtrl, pColors as CNUMERICUPDOWN_COLORS ptr )` | Copies the whole struct in, pushes the value cell's colours into the embedded `CTextBox`, and repaints. |
+
+To change one colour, read-modify-write:
+
+```freebasic
+dim as CNUMERICUPDOWN_COLORS clrs
+CNumericUpDown_GetColors( hSpin, @clrs )
+clrs.ButtonBackColorHot     = BGR( 62,140, 90)
+clrs.ButtonBackColorPressed = BGR( 42,100, 64)
+clrs.FocusBorderColor       = BGR(120,200,150)
+CNumericUpDown_SetColors( hSpin, @clrs )
+```
+
+### Callback registration
+
+| Function | Description |
+|---|---|
+| `CNumericUpDown_SetPaintCallback( hCtrl, usersub )` | Installs a renderer that draws the frame, the cells, the dividers and the glyphs **instead of** the built-in painter. Repaints. It never draws the number. |
+| `CNumericUpDown_SetMessageCallback( hCtrl, userfunc )` | Installs an observer for the container's mouse and timer messages **and** the value field's relayed key, wheel and focus messages. |
+| `CNumericUpDown_SetValueChangedCallback( hCtrl, usersub )` | Installs the handler told when the **user** changes the value. |
+
+All three are optional and independent.
+
+---
+
+## Colors
+
+The colour surface is one flat struct, `CNUMERICUPDOWN_COLORS`, with eighteen `COLORREF` fields.
+Every field ships with a usable dark-theme default, so a control you never call
+`CNumericUpDown_SetColors` on still looks right.
+
+| Field | Paints |
+|---|---|
+| `BackColor` | The control's own client area — visible only **outside** the rounded corners |
+| `BorderColor` | The frame outline, idle |
+| `FocusBorderColor` | The frame outline while the value field has focus |
+| `BorderColorDisabled` | The frame outline when the control is disabled |
+| `DividerColor` | The two hairlines, idle |
+| `DividerColorDisabled` | The two hairlines when the control is disabled |
+| `ValueBackColor` | The value cell's background — and the frame's base fill |
+| `ValueForeColor` | The number itself |
+| `ValueBackColorDisabled` | The value cell's background when disabled — and the frame's base fill |
+| `ValueForeColorDisabled` | The number when disabled |
+| `ButtonBackColor` | A button cell, idle |
+| `ButtonBackColorHot` | A button cell, mouse over |
+| `ButtonBackColorPressed` | A button cell, held down with the cursor still on it |
+| `ButtonBackColorDisabled` | A button cell, disabled **or at its limit** |
+| `GlyphColor` | The `−` / `+` bars, idle |
+| `GlyphColorHot` | The bars, mouse over |
+| `GlyphColorPressed` | The bars, pressed |
+| `GlyphColorDisabled` | The bars, disabled or at the limit |
+
+The four `Value*` fields are handed to the embedded `CTextBox` rather than painted by this
+control — the RichEdit draws the number. They live in this struct so that you set every colour
+of the control in one place. They are re-applied whenever the enabled state changes.
+
+### Which colour wins
+
+For each button cell, the built-in painter picks one background and one glyph colour per
+repaint, in this precedence:
+
+```
+disabled   >   pressed   >   hot   >   idle
+```
+
+where **disabled means either the whole control is disabled *or* this particular button is at
+its limit**. A button that can no longer move the value greys itself while the rest of the
+control stays live; that is the only per-part state in the renderer.
+
+"Pressed" means held down **and** the cursor still on that button. Slide off during a press and
+the button stops painting pressed — without the step being undone.
+
+The frame outline has its own three-way precedence:
+
+```
+disabled   >   focused   >   idle
+```
+
+### Why the control reads as one flat cell at rest
+
+`ButtonBackColor` defaults **equal to** `ValueBackColor`, so at rest the dividers are the only
+thing separating the three parts and the control reads as a single rounded cell that only
+sprouts buttons when you hover it. If you want visibly raised buttons, set the field.
+
+### What the painter draws
+
+The paint order is load-bearing, and it is what keeps the corners round:
+
+| Step | What |
+|---|---|
+| 1 | The client, in `BackColor` — shows through outside the rounded corners |
+| 2 | The whole frame, as a filled **round** rect in the value background colour. This is what makes the corners round, and it is also the value cell's background for the strip above and below the child |
+| 3 | Each button cell, as a filled round rect **extended inward past the divider**, so its unwanted inner rounding lands somewhere harmless and only the outer, wanted rounding survives |
+| 4 | The dividers and the glyphs, as filled **rectangles** — an antialiased one-pixel axis-aligned rule comes out grey and blurry, so antialiasing is reserved for curves |
+| 5 | The frame **outline** last, over everything |
+
+All of it goes through `CBufferPaint`, which renders geometry with GDI+, so the frame's corners
+are antialiased. A paint callback gets that same buffer and inherits the same primitives.
+
+---
 
 ## Callbacks
 
-| Callback | Fires |
+### Value changed
+
+```freebasic
+type NUD_ValueChangedCallbackSub as sub( byval hCtrl as HWND, byval nValue as double )
+```
+
+The **user** changed the value. Fires after the value has been clamped, snapped and displayed,
+so `CNumericUpDown_GetValue( hCtrl )` already equals `nValue`.
+
+See [Who notifies, and when](#who-notifies-and-when) for the timing table. In short: immediately
+for a button, an auto-repeat tick, an arrow key, PgUp/PgDn and the wheel; on commit only for
+typing; never for a programmatic setter.
+
+That last part is what makes it safe to call `CNumericUpDown_SetValue` from inside this handler.
+
+### Paint
+
+```freebasic
+type NUD_PaintCallbackSub as sub( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
+```
+
+Draws the frame, the cells, the dividers and the glyphs **instead of** the built-in painter.
+Paint through `p->b`, the control's double buffer for this repaint — do not touch the screen DC.
+
+The control has already filled the client with `BackColor` before calling you, so a callback
+that only wants to add something on top does not have to repaint the background.
+
+**It does not draw the number.** The RichEdit paints that over `rcValue` afterwards, whatever
+you drew there.
+
+`CNUMERICUPDOWN_PAINTINFO` carries everything you need:
+
+| Field | Meaning |
 |---|---|
-| `NUD_ValueChangedCallbackSub` | the **user** changed the value — see the table above |
-| `NUD_MessageCallbackFunc` | mouse, timer, key, wheel and focus messages. Return TRUE to suppress default handling |
-| `NUD_PaintCallbackSub` | draw the frame, cells, dividers and glyphs instead of the built-in painter |
+| `hCtrl` | The control, so the callback can query it |
+| `b` | The control's `CBufferPaint` for this repaint (borrowed, not owned) |
+| `rcClient` | The whole client area |
+| `rcFrame` | Where the rounded border is stroked |
+| `rcMinus` | The left button cell |
+| `rcDiv1` | The hairline between the `−` cell and the value cell |
+| `rcValue` | The value cell — the `CTextBox` child sits exactly here |
+| `rcDiv2` | The hairline between the value cell and the `+` cell |
+| `rcPlus` | The right button cell |
+| `rcMinusBar` | The `−` glyph |
+| `rcPlusBarH` | The `+` glyph, horizontal bar |
+| `rcPlusBarV` | The `+` glyph, vertical bar |
+| `hotPart` | `NUD_PART_*` under the cursor, or `NUD_PART_NONE` |
+| `pressedPart` | `NUD_PART_*` held down **and** the cursor still inside, or `NUD_PART_NONE` |
+| `isEnabled` | The control's enabled state |
+| `isFocused` | The value field owns the keyboard focus — draw the focus-coloured frame |
+| `bAtMin` | The `−` button can do nothing: draw it disabled |
+| `bAtMax` | Likewise the `+` button |
+| `nValue` | The current value, already clamped and snapped |
 
-**Two sources feed one message callback.** The container's own messages (the mouse over the
-buttons, the timers, enable/disable) arrive directly; the value field's key, wheel and focus
-messages arrive relayed from the embedded CTextBox with the handle rewritten to *this*
-control. A host sees one message stream and never has to know a RichEdit is in there.
+Every rect is precomputed. Use them as given — in particular, never re-derive a glyph bar from
+its cell by repeating the centring arithmetic, because `CNumericUpDown_SetGlyphSize` can change
+it underneath you.
 
-**The result is IGNORED for two messages.** `WM_LBUTTONUP`, because the control holds capture
-across a button press and the up-message is what releases it — suppressing it would strand
-capture. `WM_KILLFOCUS`, because focus loss is what *commits* a typed value, and a suppressed
-commit would leave the control displaying a number it has not accepted.
+`bAtMin` / `bAtMax` are how a callback gets the at-a-limit greying without having to know
+anything about the range.
 
-## The host obligation
+> **A primitive that fills a rectangle covering the whole control will erase everything under
+> it.** Anything that fills *and* strokes — `PaintBorderRect`, `PaintRoundBorderRect` — fills
+> with the current back colour unconditionally; only the stroke is conditional. Used as a
+> *frame*, over pixels you have already drawn, it floods the lot and leaves a solid block with
+> only the RichEdit's number showing through, while still reporting no error and still passing
+> every check that looks at geometry. Use `PaintRoundOutline`, which strokes without filling —
+> with curvature 0 if you want square corners.
 
-The value field carries CTextBox's built-in right-click Cut/Copy/Paste/Select All menu, which
-is a **CPopupMenu** and therefore not modal: keyboard navigation and click-outside dismissal
-both live in a message filter. A host that never calls `CNumericUpDown_FilterMessage` gets a
-menu that opens and paints but cannot be driven from the keyboard and never closes on an
-outside click.
+### Message
 
-It forwards to `CTextBox_FilterMessage`, so an app already calling that is covered either way
-and calling both is harmless. It exists so a host adopting this control has **one** call to
-add rather than having to know there is a CTextBox inside it with a CPopupMenu inside that.
+```freebasic
+type NUD_MessageCallbackFunc as function( byval m as CNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
+```
 
-### One trap when writing a paint callback
+Observes messages as they arrive. Return TRUE to suppress the control's own handling of that
+message, FALSE to let it proceed.
 
-Draw the frame with **`PaintRoundOutline`** (curvature 0 for square corners), never
-`PaintBorderRect` or `PaintRoundBorderRect`. Those delegate to `PaintRectFactory`, which
-**fills the rect with the current back colour unconditionally** — the fill is not gated on
-anything, only the stroke is. Used for a frame, over pixels you have just drawn, it floods the
-whole control with whatever colour you last set and erases the cells, the dividers and the
-glyphs, leaving a solid block with only the value showing through.
+`CNUMERICUPDOWN_MESSAGEINFO` carries four fields:
 
-Nothing reports an error, and every geometry assertion still passes. This exact defect has now
-been written three times in this control family (`CComboBox`, `CToggle`, and the demo callback
-here), every time by copying a sibling's paint callback without re-checking it.
-`SelfTest_MinusCellTones` asserts against it: it drives the demo's callback into an offscreen
-buffer and counts colours inside the minus cell, where **one** colour means flooded.
+| Field | Meaning |
+|---|---|
+| `hCtrl` | This control — **always**, even for a message that arrived at the RichEdit |
+| `uMsg` | The message |
+| `wParam` | Its `wParam` |
+| `lParam` | Its `lParam` |
 
-The same shape bites anything drawn *over* existing pixels, not just the frame.
+**Two sources feed this one callback.** The container's own messages — the mouse over the two
+buttons, the hover and repeat timers, `WM_ENABLE`, the right button, a hover wheel — arrive
+directly. The value field's key, wheel and focus messages arrive relayed from the embedded
+`CTextBox`, with `hCtrl` rewritten to *this* control. So you see one message stream for the
+whole control and never have to know a RichEdit is in there.
 
-## Two traps worth knowing
+**Your return value is ignored for two messages:**
 
-**Capture is taken, but not for the reason its siblings take it.** A spinner **steps on the
-button-down**, not on the release — it has to, because auto-repeat has to start somewhere and
-a first step deferred to the release would arrive after the repeats it precedes. So sliding
-off a button does *not* undo the step that already happened; this is not the press/cancel
-gesture `CToggle` and `CSelectBar` implement. What capture buys here is that the repeat stops
-the moment the cursor leaves the button (and resumes, after the full delay, if it comes back),
-and that the up-message is guaranteed to arrive wherever the cursor has wandered to, so the
-repeat timer can never outlive the gesture. Every real spinner behaves this way.
+| Message | Why |
+|---|---|
+| `WM_LBUTTONUP` | The control holds mouse capture across a button press, and the up-message is what releases it. A callback that suppressed it would strand the capture and route every later click to this control. Suppressing `WM_LBUTTONDOWN` suppresses the press itself, which *is* allowed — no capture has been taken at that point. |
+| `WM_KILLFOCUS` | Focus loss is what **commits** a typed value. Suppressing it would leave the control displaying a number it has not accepted. `WM_SETFOCUS` may be suppressed; nothing depends on it but the frame colour. |
 
-**`CS_DBLCLKS` is deliberately NOT set** — CToggle's and CIconPanel's call rather than
-CSelectBar's. With it, the second of two rapid clicks arrives as `WM_LBUTTONDBLCLK` *instead
-of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would get one.
+For every other message, TRUE suppresses the default handling — including the four navigation
+keys and the wheel, so a host can repurpose them.
 
-## Not implemented, deliberately
+---
 
-- **No wrap-around.** A font size stepping from 72 straight to 6 is a bug, not a feature.
-- **No thousands separator and no prefix/suffix text.** The field's grammar and the ideal-size
-  measurement would both have to learn about them.
-- **No stacked up/down arrows.** One layout, one geometry routine, one set of assertions. A
-  second style can be added later without changing the API shape.
-- **No tooltips**, no animation, and **no tri-state**.
-- **No `CNumericUpDown_SetValueSilently` distinction** — every setter here is already silent.
+## Constants
 
-## Verification
+```freebasic
+enum
+    NUD_PART_NONE = 0
+    NUD_PART_MINUS
+    NUD_PART_VALUE       ' reported by HitTest, never acted on
+    NUD_PART_PLUS
+end enum
+```
 
-- Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — 54 assertions, all passing: every rect at a comfortable size
-  and at one too narrow to fit, the cells and dividers tiling the client exactly, the glyph
-  bars centred and the `+` cross symmetric, the child positioned exactly on `rcValue`, a
-  hit-test round trip over every part, `GetIdealSize` against an independently measured
-  oracle, the decimal-grid arithmetic, clamping at both limits, every programmatic setter
-  proven silent, and the wheel's sub-notch accumulation crossing a 120 boundary.
-- **The interactive pass has been run and passed** (2026-07-23, by the author): hover, the
-  pressed look, auto-repeat, Tab navigation through the two container levels, select-on-focus
-  versus caret-on-button-click, typing and its commit, the right-click menu, and the centred
-  number's appearance between its margins. That the number **is** centred is asserted three
-  ways, including by asking the RichEdit — but whether it *looks* right was never anything an
-  assertion could answer.
+| Constant | Value | Meaning |
+|---|---:|---|
+| `CNUD_DEFAULT_BUTTONW` | 28 | Default button-cell width, DPI-scaled at create |
+| `CNUD_DEFAULT_VALUEPAD` | 6 | Default text margin inside the value cell, left and right, DPI-scaled at create |
+| `CNUD_DEFAULT_VERTPAD` | 5 | Default vertical padding, used only by `GetIdealSize`, DPI-scaled at create |
+| `CNUD_DEFAULT_CORNERRADIUS` | 6 | Default frame corner radius, DPI-scaled at create |
+| `CNUD_DEFAULT_BORDERTHICK` | 1 | Default frame thickness, **never** DPI-scaled |
+| `CNUD_DEFAULT_DIVIDERTHICK` | 1 | Default divider thickness, **never** DPI-scaled |
+| `CNUD_DEFAULT_GLYPHLENGTH` | 10 | Default glyph bar length, DPI-scaled at create |
+| `CNUD_DEFAULT_GLYPHTHICK` | 1 | Default glyph stroke weight, **DPI-scaled** at create — it is an icon stroke, not a rule |
+| `CNUD_DEFAULT_REPEATDELAY` | 400 | Milliseconds held before auto-repeat begins |
+| `CNUD_DEFAULT_REPEATINTERVAL` | 60 | Milliseconds between auto-repeat steps |
+| `CNUD_DEFAULT_MIN` | −1000000.0 | Default range minimum |
+| `CNUD_DEFAULT_MAX` | 1000000.0 | Default range maximum |
+| `CNUD_DEFAULT_INCREMENT` | 1.0 | Default increment; the large increment defaults to ten times this |
+| `CNUD_DEFAULT_DECIMALPLACES` | 0 | Default decimal places — integers |
 
-  It matters more here than in a typical control, because two of the three defects found in
-  this one were invisible to every assertion that looked at numbers: an `EM_SETPARAFORMAT`
-  that was refused in silence, and a paint callback that flooded the control with a single
-  colour. Both now have assertions; neither had one when it shipped.
+The range default is deliberately wide: a host that never calls `CNumericUpDown_SetRange` gets a
+control that does not silently clamp, while the range machinery is always present so the buttons
+can grey out at a limit.
 
-  No attempt is made to fake a click — a `SendMessage`-simulated click cannot reproduce mouse
-  capture, so it would prove nothing. The wheel *is* driven by a real message, because a
-  hover-wheel genuinely arrives that way.
+`IDT_CNUMERICUPDOWN_HOTTRACK`, `IDT_CNUMERICUPDOWN_REPEAT` and `CNUMERICUPDOWN_HOTTRACK_MS` are
+the control's own timer ids and its hover-poll period (100 ms). Timer ids are per-window, so
+every instance shares them and you need reserve nothing.
+
+---
+
+## Related controls
+
+**`CTextBox`** is the value field. Everything about typing in this control — character
+filtering, paste validation, selection, undo, the text limit, the cue banner, the right-click
+menu — is `CTextBox` behaviour, so its documentation is where to look when the question is about
+editing rather than about spinning. `CNumericUpDown_GetTextBoxHandle` gives you the handle to
+apply its setters to, minus the three this control owns.
+
+**`CPopupMenu`** is what `CTextBox` uses for that right-click menu. You never talk to it directly
+here, but it is the reason `CNumericUpDown_FilterMessage` has to be in your pump.
+
+**`CBufferPaint`** is the drawing surface this control — and any paint callback you write —
+renders through. Its primitives (`PaintRoundRect`, `PaintRoundOutline`, `PaintRect`,
+`SetBackColor`, `SetPenColor`) are what a callback has to work with.

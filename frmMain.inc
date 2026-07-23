@@ -609,6 +609,28 @@ sub CNumericUpDown_SelfTest()
     SelfTest_Check( "HitTest returns NONE outside the client", _
         CNumericUpDown_HitTest( h, ptOutside ) = NUD_PART_NONE, "" )
 
+    ' ---- the thickness scaling asymmetry -------------------------------------------------
+    ' Border and divider are RULES and are never DPI-scaled; the glyph bars are the strokes of
+    ' an ICON and are. Pinned here because the asymmetry looks like an oversight to anyone
+    ' reading the Create defaults, and "harmonising" it in either direction is a regression:
+    ' scale the rules and hairlines thicken with the display, unscale the glyph and the minus
+    ' sign becomes a thread at high DPI (which is what a screenshot caught it doing).
+    '
+    ' On a 96-DPI display every ScaleY(n) = n, so this passes trivially there and only
+    ' discriminates on a scaled one. That is worth stating rather than hiding: the assertion
+    ' is a guard against an edit, not a proof about this machine.
+    dim as CWindow ptr pTestWin = AfxCWindowPtr( h )
+    dim as long nScaledOne = iif( pTestWin, pTestWin->ScaleY(CNUD_DEFAULT_GLYPHTHICK), 1 )
+    if nScaledOne < 1 then nScaledOne = 1
+    CNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
+    SelfTest_Check( "the glyph thickness IS DPI-scaled (it is an icon stroke)", _
+        glyphT = nScaledOne, "glyphThick=" & str(glyphT) & " expected=" & str(nScaledOne) )
+    SelfTest_Check( "the border and divider are NOT DPI-scaled (they are rules)", _
+        (CNumericUpDown_GetBorderThickness(h) = CNUD_DEFAULT_BORDERTHICK) andalso _
+        (CNumericUpDown_GetDividerThickness(h) = CNUD_DEFAULT_DIVIDERTHICK), _
+        "border=" & str(CNumericUpDown_GetBorderThickness(h)) & _
+        " divider=" & str(CNumericUpDown_GetDividerThickness(h)) )
+
     ' ---- the custom painter actually draws something ------------------------------------
     ' Drives the demo's own paint callback offscreen and counts colours in the minus cell.
     ' ONE colour means the cell was flooded -- see SelfTest_MinusCellTones for the whole

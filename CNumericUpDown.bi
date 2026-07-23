@@ -16,8 +16,17 @@
 #define CNUMERICUPDOWN_HOTTRACK_MS    100
 
 ' Defaults. The SIZE values are DPI-scaled at Create; every setter afterwards takes raw
-' pixels and the caller scales (the family rule). The three THICKNESS values are NOT
-' DPI-scaled, ever -- a hairline should stay a hairline (CMenuBar's nSeparatorThickness).
+' pixels and the caller scales (the family rule).
+'
+' TWO of the three THICKNESS values are NOT DPI-scaled, ever -- a hairline should stay a
+' hairline (CMenuBar's nSeparatorThickness rule): the border and the divider are RULES, and a
+' rule that thickens with the display stops reading as a rule.
+'
+' THE GLYPH THICKNESS IS THE EXCEPTION, and the asymmetry is deliberate -- do not "harmonise"
+' it. The bars of the "-" and "+" are not rules, they are the strokes of an ICON, and an icon
+' whose length scales while its weight does not gets thinner and thinner relative to itself as
+' the display scales. At 1.75x an unscaled bar is 18 pixels long and 1 thick, which reads as a
+' thread rather than a minus sign. Asked of a real screenshot, not reasoned about.
 #define CNUD_DEFAULT_BUTTONW        28
 #define CNUD_DEFAULT_VALUEPAD        6     ' left and right, inside the value cell
 #define CNUD_DEFAULT_VERTPAD         5     ' above and below the text, for GetIdealSize
@@ -25,7 +34,7 @@
 #define CNUD_DEFAULT_BORDERTHICK     1     ' not DPI-scaled
 #define CNUD_DEFAULT_DIVIDERTHICK    1     ' not DPI-scaled
 #define CNUD_DEFAULT_GLYPHLENGTH    10     ' the bar of the "-", and each bar of the "+"
-#define CNUD_DEFAULT_GLYPHTHICK      1     ' not DPI-scaled
+#define CNUD_DEFAULT_GLYPHTHICK      1     ' DPI-scaled -- it is an icon stroke, not a rule
 
 ' Auto-repeat: hold a button and it keeps stepping. Delay before the first repeat, then one
 ' step per interval. Either at 0 disables repeating entirely (one click = one step).
@@ -221,7 +230,7 @@ type CNUMERICUPDOWN
     nBorderThick    as long = CNUD_DEFAULT_BORDERTHICK    ' NOT DPI-scaled
     nDividerThick   as long = CNUD_DEFAULT_DIVIDERTHICK   ' NOT DPI-scaled
     nGlyphLength    as long = CNUD_DEFAULT_GLYPHLENGTH    ' DPI-scaled at Create
-    nGlyphThick     as long = CNUD_DEFAULT_GLYPHTHICK     ' NOT DPI-scaled
+    nGlyphThick     as long = CNUD_DEFAULT_GLYPHTHICK     ' DPI-scaled at Create (see above)
     rcFrame         as RECT               ' derived
     rcMinus         as RECT               ' derived
     rcDiv1          as RECT               ' derived
@@ -512,8 +521,9 @@ declare sub      CNumericUpDown_Refresh( byval hCtrl as HWND )
 
 ' ----------------------------------------------------------------------------------------
 ' Layout.  ALL setters take RAW PIXELS -- the caller DPI-scales (the family rule; only the
-' Create-time defaults are scaled for you). The three THICKNESS values should not be scaled
-' at all: a hairline stays a hairline.
+' Create-time defaults are scaled for you). The BORDER and DIVIDER thicknesses should not be
+' scaled at all -- a hairline stays a hairline -- but the GLYPH thickness should be, because
+' it is an icon stroke rather than a rule. See the defines at the top of this file.
 '
 '   SetFont is CALLER-OWNED -- the control never deletes the HFONT. It is handed to the
 '     CTextBox, which converts it to a CHARFORMATW internally.

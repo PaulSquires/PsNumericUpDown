@@ -943,15 +943,27 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
     pNud->idc_Ctrl = CtrlID
 
     ' Only the Create-time defaults are DPI-scaled for us; every setter afterwards takes raw
-    ' pixels and the caller scales (the family rule). nBorderThick, nDividerThick and
-    ' nGlyphThick are NOT scaled at all -- a hairline should stay a hairline, which is
-    ' CMenuBar's nSeparatorThickness rule.
+    ' pixels and the caller scales (the family rule).
+    '
+    ' nBorderThick and nDividerThick are NOT scaled -- a hairline should stay a hairline,
+    ' CMenuBar's nSeparatorThickness rule. nGlyphThick IS scaled, and that asymmetry is
+    ' deliberate: the border and divider are rules, while the glyph bars are the strokes of an
+    ' icon, and scaling an icon's length but not its weight makes it thinner relative to
+    ' itself on every step up in DPI. At 1.75x the unscaled version was 18 pixels long and 1
+    ' thick, which read as a thread rather than a minus sign.
+    '
+    ' ScaleY for the thickness because the "-" bar's thickness is a vertical extent; ScaleX
+    ' and ScaleY agree in practice, and picking the axis the primary glyph is measured on
+    ' keeps the choice explicable. Floored at 1 so a fractional scale can never round a
+    ' visible bar away to nothing.
     pNud->nButtonWidth   = pWindow->ScaleX( CNUD_DEFAULT_BUTTONW )
     pNud->nValuePadLeft  = pWindow->ScaleX( CNUD_DEFAULT_VALUEPAD )
     pNud->nValuePadRight = pWindow->ScaleX( CNUD_DEFAULT_VALUEPAD )
     pNud->nVertPadding   = pWindow->ScaleY( CNUD_DEFAULT_VERTPAD )
     pNud->nCornerRadius  = pWindow->ScaleX( CNUD_DEFAULT_CORNERRADIUS )
     pNud->nGlyphLength   = pWindow->ScaleX( CNUD_DEFAULT_GLYPHLENGTH )
+    pNud->nGlyphThick    = pWindow->ScaleY( CNUD_DEFAULT_GLYPHTHICK )
+    if pNud->nGlyphThick < 1 then pNud->nGlyphThick = 1
 
     SetWindowLongPtr( hCtrl, GWLP_ID, CtrlID )
 

@@ -36,7 +36,7 @@ Build (the toolchain is not on `PATH`, and AfxNova resolves relative to the work
 C:\dev\tiko_editor\toolchains\FreeBASIC-1.10.1-winlibs-gcc-9.3.0\fbc64.exe -i "C:\dev" main.bas main.rc
 ```
 
-or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 52 assertions,
+or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 54 assertions,
 geometry and value arithmetic.
 
 Include order — the price of embedding a real editing control:
@@ -167,8 +167,12 @@ one place this control measures anything, and it opens its own DC, which is what
 valid *before* the control has ever been sized.
 
 All setters take **raw pixels**; the caller DPI-scales. Only the Create-time defaults are
-scaled for you — and the three *thickness* values are never scaled at all, because a hairline
-should stay a hairline.
+scaled for you. The **border** and **divider** thicknesses are never scaled at all, because a
+hairline should stay a hairline — but the **glyph** thickness is, and that asymmetry is
+deliberate. Those two are *rules*; the `−` and `+` bars are the strokes of an *icon*, and
+scaling an icon's length but not its weight makes it thinner relative to itself at every step
+up in DPI. At 1.75× the unscaled version was 18 px long and 1 px thick, which read as a thread
+rather than a minus sign.
 
 ## Rendering
 
@@ -329,7 +333,7 @@ of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would g
 ## Verification
 
 - Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — 52 assertions, all passing: every rect at a comfortable size
+- `CNUMERICUPDOWN_SELFTEST=1` — 54 assertions, all passing: every rect at a comfortable size
   and at one too narrow to fit, the cells and dividers tiling the client exactly, the glyph
   bars centred and the `+` cross symmetric, the child positioned exactly on `rcValue`, a
   hit-test round trip over every part, `GetIdealSize` against an independently measured

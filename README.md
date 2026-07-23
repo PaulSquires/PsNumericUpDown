@@ -21,8 +21,9 @@ derived and never set, programmatic setters silent.
 about it — this file claimed "the thirteenth" while `CScrollPanel` was claiming the same
 ordinal in `CLAUDE.md`.)*
 
-**It is the third control that wraps a real child** (after `CListBox` and `CTextBox`), and the
-second that is focusable (after `CToggle`).
+**It is the third control that wraps a real child** (after `CListBox` and `CTextBox`) — and
+that position *is* load-bearing, because it is about shape. It is also one of the family's
+three focusable controls, with `CToggle`, which established the machinery, and `CComboBox`.
 
 ## Files
 

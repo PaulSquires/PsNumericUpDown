@@ -339,10 +339,18 @@ of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would g
   hit-test round trip over every part, `GetIdealSize` against an independently measured
   oracle, the decimal-grid arithmetic, clamping at both limits, every programmatic setter
   proven silent, and the wheel's sub-notch accumulation crossing a 120 boundary.
-- **What the self-test cannot cover, and is therefore the author's interactive pass:** hover,
-  the pressed look, auto-repeat, Tab navigation through the two container levels,
-  select-on-focus versus caret-on-button-click, typing and its commit, the right-click menu,
-  and whether the centred number *looks* right between its margins (that it **is** centred is
-  asserted three ways, including by asking the RichEdit). No attempt is made to fake a click —
-  a `SendMessage`-simulated click cannot reproduce mouse capture, so it would prove nothing.
-  The wheel *is* driven by a real message, because a hover-wheel genuinely arrives that way.
+- **The interactive pass has been run and passed** (2026-07-23, by the author): hover, the
+  pressed look, auto-repeat, Tab navigation through the two container levels, select-on-focus
+  versus caret-on-button-click, typing and its commit, the right-click menu, and the centred
+  number's appearance between its margins. That the number **is** centred is asserted three
+  ways, including by asking the RichEdit — but whether it *looks* right was never anything an
+  assertion could answer.
+
+  It matters more here than in a typical control, because two of the three defects found in
+  this one were invisible to every assertion that looked at numbers: an `EM_SETPARAFORMAT`
+  that was refused in silence, and a paint callback that flooded the control with a single
+  colour. Both now have assertions; neither had one when it shipped.
+
+  No attempt is made to fake a click — a `SendMessage`-simulated click cannot reproduce mouse
+  capture, so it would prove nothing. The wheel *is* driven by a real message, because a
+  hover-wheel genuinely arrives that way.

@@ -153,6 +153,15 @@ endpoint-inclusion question. The same reasoning covers the dividers.
 Both `+` bars are centred on the *same* cell centre rather than one being derived from the
 other, so the cross is symmetric whatever the parity of the cell and the bar.
 
+**The glyph thickness IS DPI-scaled, unlike the border and the divider.** It was not, at first:
+all three were excluded together under the family's "a hairline should stay a hairline" rule
+(CMenuBar's `nSeparatorThickness`). That rule was written for *rules*. A border and a divider
+are rules; the `−` and `+` bars are the strokes of an **icon**, and scaling an icon's length
+while pinning its weight makes it thinner relative to itself at every step up in DPI. At 1.75×
+the bar was 18 px long and 1 px thick, which read as a thread rather than a minus sign — caught
+in a screenshot, not by an assertion. The asymmetry is now documented in four places precisely
+because it looks like an oversight, and harmonising it in either direction is a regression.
+
 ### 9. Range clamps, never wraps
 
 A font size stepping from 72 straight to 6 is a bug, not a feature. Wrap would be right for
@@ -176,6 +185,33 @@ than a fixed epsilon, which keeps it correct at 0 decimal places as well as at 4
 Up/Down and PgUp/PgDn are free to take — a single-line RichEdit does nothing useful with them.
 Home and End are not: they move the caret to the start and end of the text, and stealing them
 for min/max would break ordinary editing in a field the user can type into.
+
+### 12. A fill-and-stroke primitive used as a frame erases everything under it
+
+Not a decision so much as a defect worth recording, because it is the **third** time this
+family has written it — `CComboBox` and `CToggle` first, both in the same place: a paint
+callback copied from a sibling without being re-checked.
+
+`CBufferPaint.PaintBorderRect` and `PaintRoundBorderRect` both delegate to `PaintRectFactory`,
+which fills the rect with the current back colour **unconditionally** — the fill is not gated
+on anything, only the stroke is. Used as a frame, over pixels the callback has already drawn,
+it floods the whole rect with whatever colour was last set. `PaintRoundOutline` is the
+primitive for drawing over existing pixels, and its own header says so; curvature 0 gives
+square corners.
+
+The built-in painter here got it right and its comment explained why. The demo callback did
+not. Worse than the two siblings: they stroked their ring only when *focused*, so their rows
+looked correct at rest, while this one strokes the frame on every paint — so the row was broken
+always, which is the only reason a screenshot of an idle window caught it.
+
+**What makes it worth twelve lines:** it is invisible to every assertion that looks at numbers.
+Geometry, arithmetic, state, callbacks — all passed, all the way through, on a control that
+rendered as two flat blocks. `SelfTest_MinusCellTones` now drives the real callback into an
+offscreen buffer and counts distinct colours in the minus cell (**1 = flooded**). It was
+written and run *before* the fix and observed to fail, so it is known to detect the defect
+rather than merely to pass — and populating every rect is what makes it valid at all, since
+CComboBox's first attempt at the same probe left rects zeroed, `PaintRectFactory` bailed on a
+negative extent, and broken and correct measured identically.
 
 ## What was rejected
 
@@ -202,19 +238,27 @@ for min/max would break ordinary editing in a field the user can type into.
   expectation in the test itself (`-50.00` is *not* wider than `1000.00`; the range was changed
   to one where the minimum genuinely is the wider string, so the assertion is load-bearing).
 
-**Not verified, and it is a real gap:** nothing interactive. Hover, the pressed look,
-auto-repeat, Tab through the two container levels, select-on-focus versus
-caret-on-button-click, typing and its commit, and the right-click menu. That is the author's
-pass. Learnings.md is explicit that a
-`SendMessage`-simulated click cannot reproduce mouse capture, so no attempt is made to fake
-one; the wheel *is* driven by a real message, because a hover-wheel genuinely arrives that way.
+**The interactive pass has been run and passed** (2026-07-23, by the author) — hover, the
+pressed look, auto-repeat, Tab through the two container levels, select-on-focus versus
+caret-on-button-click, typing and its commit, the right-click menu, and appearance. That is
+what closed this control out, and it carried more weight here than usual: **two of the three
+defects found in this control were invisible to every assertion that looked at numbers** — an
+`EM_SETPARAFORMAT` refused in silence (decision 2) and a paint callback that flooded the whole
+control with one colour (decision 12). The third, the border-deflation bug, was caught by the
+geometry assertions on their first run. Both of the invisible two now have assertions of their
+own; neither had one when it shipped, and a screenshot is what surfaced the second. A fourth,
+the hairline glyph (decision 8), was also a screenshot finding — not a defect, but a rule
+applied to something it was not written for.
 
-**Centring is no longer on that list.** It was the single highest-risk item, and it turned out
-to be broken (see decision 2). It is now asserted three ways — the alignment round-trips
-through `CTextBox_GetTextAlign`, the RichEdit itself reports `PFA_CENTER` when asked directly,
-and it still reports `PFA_CENTER` after a value change rewrites the buffer. What is left on
-the interactive list is genuinely visual: whether the centred number *looks* right between the
-margins, not whether it is centred at all.
+Learnings.md is explicit that a `SendMessage`-simulated click cannot reproduce mouse capture,
+so no attempt is made to fake one; the wheel *is* driven by a real message, because a
+hover-wheel genuinely arrives that way.
+
+**Centring stopped being an interactive-only question partway through.** It was the single
+highest-risk item, and it turned out to be broken (decision 2). It is now asserted three ways
+— the alignment round-trips through `CTextBox_GetTextAlign`, the RichEdit itself reports
+`PFA_CENTER` when asked directly, and it still reports `PFA_CENTER` after a value change
+rewrites the buffer. Only its *appearance* was left for the eye.
 
 ## If this is ever folded into a host
 

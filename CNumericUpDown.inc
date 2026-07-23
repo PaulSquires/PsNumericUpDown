@@ -80,36 +80,6 @@ end function
 
 
 ' ========================================================================================
-' Centre the number in the value field.
-'
-' CTextBox has no alignment API -- its text is left-aligned against the margin -- so this
-' goes straight at the RichEdit through CTextBox_GetRichEditHandle, the escape hatch CTextBox
-' documents for exactly this kind of thing. AfxNova's RichEdit_SetParaFormat wraps the
-' EM_SETPARAFORMAT SendMessage.
-'
-' RE-STAMPED AFTER EVERY WRITE, and that is deliberate: CTextBox's numeric mode replaces the
-' whole buffer with an internal WM_SETTEXT when it reformats on focus loss, and a paragraph
-' format is a property of the paragraph that text lives in. The alignment does appear to
-' survive in practice -- one paragraph in, one paragraph out -- but "appear to" is not a
-' contract with a vendored file, and re-applying it costs one SendMessage on a path that
-' already sends several.
-' ========================================================================================
-private sub NUD_ApplyCenterAlignment( byval pNud as CNUMERICUPDOWN ptr )
-    if pNud = 0 then exit sub
-    if pNud->hTextBox = 0 then exit sub
-
-    dim as HWND hEdit = CTextBox_GetRichEditHandle( pNud->hTextBox )
-    if hEdit = 0 then exit sub
-
-    dim as PARAFORMAT pf
-    pf.cbSize     = sizeof(PARAFORMAT)
-    pf.dwMask     = PFM_ALIGNMENT
-    pf.wAlignment = PFA_CENTER
-    RichEdit_SetParaFormat( hEdit, @pf )
-end sub
-
-
-' ========================================================================================
 ' Push the value cell's colors into the CTextBox for the control's current enabled state.
 '
 ' The RichEdit draws the number, so these two colors have to live on the child -- but they
@@ -143,8 +113,12 @@ private sub NUD_DisplayValue( byval pNud as CNUMERICUPDOWN ptr, byval nValue as 
 
     pNud->nValue = nValue
     if pNud->hTextBox then
+        ' No alignment work here. The centring is set ONCE at Create and survives every
+        ' subsequent write -- CTextBox's own harness asserts exactly that. An earlier version
+        ' of this routine re-stamped it after each value change, which was both unnecessary
+        ' and (as it turned out) ineffective: it was sending EM_SETPARAFORMAT itself, which
+        ' TM_PLAINTEXT silently refuses.
         CTextBox_SetValue( pNud->hTextBox, nValue )
-        NUD_ApplyCenterAlignment( pNud )
     end if
     ' The buttons' at-a-limit appearance is derived from the value, so a repaint is not
     ' optional here even though the number itself is drawn by the child.
@@ -1000,6 +974,11 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
         ' button click deliberately bypasses this -- see WM_LBUTTONDOWN.
         CTextBox_SetSelectOnFocus( pNud->hTextBox, true )
         CTextBox_SetMargins( pNud->hTextBox, pNud->nValuePadLeft, pNud->nValuePadRight )
+        ' Centred, which is the whole reason CTextBox grew an alignment setter. It is set
+        ' HERE, while the buffer is still empty, and that timing is not incidental: applying
+        ' alignment rewrites the buffer and discards the undo history, so a control that has
+        ' been typed into pays for it. At Create there is nothing to pay.
+        CTextBox_SetTextAlign( pNud->hTextBox, TXT_ALIGN_CENTER )
         NUD_ApplyStateColors( pNud )
 
         CTextBox_SetFocusCallback( pNud->hTextBox, @NUD_OnTextBoxFocus )
@@ -1007,7 +986,6 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
         CTextBox_SetMessageCallback( pNud->hTextBox, @NUD_OnTextBoxMessage )
 
         CTextBox_SetValue( pNud->hTextBox, pNud->nValue )
-        NUD_ApplyCenterAlignment( pNud )
         ShowWindow( pNud->hTextBox, SW_SHOW )
     end if
 
@@ -1203,10 +1181,10 @@ sub CNumericUpDown_SetFont( byval hCtrl as HWND, byval hFont as HFONT )
     dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->hFont = hFont
-    if pNud->hTextBox then
-        CTextBox_SetFont( pNud->hTextBox, hFont )
-        NUD_ApplyCenterAlignment( pNud )
-    end if
+    ' A font change re-applies the CHARFORMAT but leaves the paragraph format alone, so the
+    ' centring set at Create is untouched -- and re-applying it here would be actively
+    ' harmful, since doing so rewrites the buffer and drops the undo history.
+    if pNud->hTextBox then CTextBox_SetFont( pNud->hTextBox, hFont )
     pNud->Refresh()
 end sub
 

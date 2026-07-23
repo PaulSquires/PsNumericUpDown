@@ -40,21 +40,39 @@ a user who knows they want 42 should be able to type 42.
 **The cost, stated honestly:** three vendored files instead of one, a mandatory message-pump
 call, and focus that lives two levels down so `GetFocus() = hCtrl` is never true.
 
-### 2. Centring the number: the escape hatch, not an upstream change
+### 2. Centring the number: upstream, after the cheap route turned out not to work at all
 
-CTextBox has **no alignment API** — its text is left-aligned against the margin. Two ways to
-fix that, and the cheap one won: `EM_SETPARAFORMAT` / `PFA_CENTER` sent straight at the
-RichEdit through `CTextBox_GetRichEditHandle`, which is the escape hatch CTextBox documents
-for precisely this kind of thing.
+CTextBox had **no alignment API** — its text was left-aligned against the margin. The first
+version of this control took the cheap route: `EM_SETPARAFORMAT` / `PFA_CENTER` sent straight
+at the RichEdit through `CTextBox_GetRichEditHandle`, the escape hatch CTextBox documents for
+precisely this. Adding a setter upstream was rejected as a second piece of work riding along.
 
-Adding `CTextBox_SetTextAlign` upstream would have been the cleaner artefact, but it is a
-change to a shared control that then needs a build, a sync into CTextBox's own repo *and* into
-tiko's vendored copy — a second piece of work riding along on this one. It remains the right
-move if a second consumer ever wants centred text.
+**That was wrong, and not for the reason the trade-off was argued over.** The escape-hatch
+version *did not work*. `TM_PLAINTEXT` — which CTextBox uses to keep one character format
+across the buffer and to make pasted text shed its rich formatting — **refuses
+`EM_SETPARAFORMAT` outright**. The message returned failure every single time, the alignment
+stayed `PFA_LEFT`, and nothing anywhere reported a problem. The number was never centred.
 
-The alignment is re-stamped after every write. It does appear to survive CTextBox's reformat
-in practice — one paragraph in, one paragraph out — but "appears to" is not a contract with a
-vendored file, and re-applying it costs one `SendMessage` on a path that already sends several.
+It shipped in the first commit, correctly flagged as the highest-risk unverified item, and
+survived because the control had no way to check its own work. What exposed it was a single
+assertion in CTextBox's harness that **asked the RichEdit** what its paragraph format actually
+was, instead of trusting a stored field. Measured, then, rather than reasoned about:
+
+| sequence | `EM_SETPARAFORMAT` returns | resulting alignment |
+|---|---|---|
+| under `TM_PLAINTEXT`, single-line | 0 (failure) | `PFA_LEFT` |
+| under `TM_PLAINTEXT`, multiline | 0 (failure) | `PFA_LEFT` |
+| under `TM_PLAINTEXT`, after select-all | 0 (failure) | `PFA_LEFT` |
+| under `TM_RICHTEXT` | 1 (success) | `PFA_CENTER` — **and it survives the switch back to plain text, and every later `SetText`** |
+
+So the upstream setter was added after all, and it is built around that last row: empty the
+buffer, flip to rich-text mode, apply, flip back, restore. `CNumericUpDown` calls it once at
+Create, while the buffer is still empty, which is when that dance costs nothing.
+
+**The generalisable lesson**, and the reason this entry is this long: the escape hatch was a
+sanctioned, documented mechanism, and using it was a defensible call. What made the outcome
+bad was not the choice — it was shipping a *silent* mechanism with no assertion behind it.
+A `SendMessage` whose return value is discarded is an assumption, not an implementation.
 
 ### 3. Typing notifies on commit, not per keystroke
 
@@ -173,7 +191,7 @@ for min/max would break ordinary editing in a field the user can type into.
 ## Verification, and its limits
 
 - Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — **48 assertions, 0 failed**. Geometry at a comfortable size and
+- `CNUMERICUPDOWN_SELFTEST=1` — **51 assertions, 0 failed**. Geometry at a comfortable size and
   at one too narrow to fit; cells and dividers tiling the client exactly; glyph centring and
   cross symmetry; the child positioned exactly on `rcValue`; a hit-test round trip over every
   part; `GetIdealSize` against an independently measured oracle (the widest formatted value at
@@ -186,13 +204,17 @@ for min/max would break ordinary editing in a field the user can type into.
 
 **Not verified, and it is a real gap:** nothing interactive. Hover, the pressed look,
 auto-repeat, Tab through the two container levels, select-on-focus versus
-caret-on-button-click, typing and its commit, the right-click menu, and whether the number is
-actually centred on screen. That is the author's pass. Learnings.md is explicit that a
+caret-on-button-click, typing and its commit, and the right-click menu. That is the author's
+pass. Learnings.md is explicit that a
 `SendMessage`-simulated click cannot reproduce mouse capture, so no attempt is made to fake
 one; the wheel *is* driven by a real message, because a hover-wheel genuinely arrives that way.
 
-The `PFA_CENTER` re-stamp surviving CTextBox's reformat is the single highest-risk item, and it
-is exactly one of the things only a human looking at the pixels can confirm.
+**Centring is no longer on that list.** It was the single highest-risk item, and it turned out
+to be broken (see decision 2). It is now asserted three ways — the alignment round-trips
+through `CTextBox_GetTextAlign`, the RichEdit itself reports `PFA_CENTER` when asked directly,
+and it still reports `PFA_CENTER` after a value change rewrites the buffer. What is left on
+the interactive list is genuinely visual: whether the centred number *looks* right between the
+margins, not whether it is centred at all.
 
 ## If this is ever folded into a host
 

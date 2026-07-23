@@ -36,7 +36,7 @@ Build (the toolchain is not on `PATH`, and AfxNova resolves relative to the work
 C:\dev\tiko_editor\toolchains\FreeBASIC-1.10.1-winlibs-gcc-9.3.0\fbc64.exe -i "C:\dev" main.bas main.rc
 ```
 
-or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 48 assertions,
+or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 51 assertions,
 geometry and value arithmetic.
 
 Include order — the price of embedding a real editing control:
@@ -114,10 +114,19 @@ would draw a second frame inside ours).
 
 ### The two gaps embedding creates, and how each is closed
 
-**CTextBox has no alignment API** — its text is left-aligned against the margin, and the
-number here is centred. `EM_SETPARAFORMAT` with `PFA_CENTER` goes straight at the RichEdit
-through `CTextBox_GetRichEditHandle`, the escape hatch CTextBox documents for exactly this,
-and is re-stamped after every write. No upstream change, nothing to sync.
+**CTextBox had no alignment API** — its text was left-aligned against the margin, and the
+number here is centred. It has one now: `CTextBox_SetTextAlign`, added upstream for this
+control and called once at Create, while the buffer is still empty.
+
+That timing is not incidental. Applying alignment **rewrites the CTextBox buffer** and
+discards its undo history, because `TM_PLAINTEXT` refuses `EM_SETPARAFORMAT` outright — see
+CTextBox's own README. At Create there is nothing to discard.
+
+This replaced an earlier version that sent `EM_SETPARAFORMAT` at the RichEdit directly
+through the documented escape hatch. That version **did not work and reported no error**: the
+message was refused every single time and the number was never centred. It was written, shipped
+in a first commit, and flagged as the highest-risk unverified item — and it took an assertion
+that *asked the RichEdit* rather than trusting the control's own stored state to expose it.
 
 **CTextBox has no enabled state.** `CNumericUpDown_SetEnabled` calls `EnableWindow` on the
 container **and** on the CTextBox, so the disable is enforced by the system rather than being
@@ -303,7 +312,7 @@ of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would g
 ## Verification
 
 - Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — 48 assertions, all passing: every rect at a comfortable size
+- `CNUMERICUPDOWN_SELFTEST=1` — 51 assertions, all passing: every rect at a comfortable size
   and at one too narrow to fit, the cells and dividers tiling the client exactly, the glyph
   bars centred and the `+` cross symmetric, the child positioned exactly on `rcValue`, a
   hit-test round trip over every part, `GetIdealSize` against an independently measured
@@ -312,6 +321,7 @@ of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would g
 - **What the self-test cannot cover, and is therefore the author's interactive pass:** hover,
   the pressed look, auto-repeat, Tab navigation through the two container levels,
   select-on-focus versus caret-on-button-click, typing and its commit, the right-click menu,
-  and whether the number is in fact centred. No attempt is made to fake a click —
+  and whether the centred number *looks* right between its margins (that it **is** centred is
+  asserted three ways, including by asking the RichEdit). No attempt is made to fake a click —
   a `SendMessage`-simulated click cannot reproduce mouse capture, so it would prove nothing.
   The wheel *is* driven by a real message, because a hover-wheel genuinely arrives that way.

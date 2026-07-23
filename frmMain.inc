@@ -307,10 +307,15 @@ end sub
 '
 ' WHAT THIS CANNOT COVER, and is therefore left to the interactive pass: hover, the pressed
 ' look, auto-repeat, Tab navigation through the two container levels, select-on-focus versus
-' caret-on-button-click, typing and its commit, the right-click menu, and whether the number
-' is in fact centred. Learnings.md is explicit that SendMessage-simulated clicks cannot
-' reproduce capture, so no attempt is made to fake one here -- the wheel is driven by a real
-' message because a hover-wheel genuinely arrives that way.
+' caret-on-button-click, typing and its commit, and the right-click menu. Learnings.md is
+' explicit that SendMessage-simulated clicks cannot reproduce capture, so no attempt is made
+' to fake one here -- the wheel is driven by a real message because a hover-wheel genuinely
+' arrives that way.
+'
+' CENTRING USED TO BE ON THAT LIST, and it was the item most likely to be quietly broken --
+' which it was. The assertions below ask the RICHEDIT what its paragraph format is, rather
+' than asking this control what it believes it set, and that is the only reason the earlier
+' silently-refused EM_SETPARAFORMAT was ever caught.
 ' ========================================================================================
 private sub SelfTest_Check( byval sName as string, byval bOK as boolean, byval sDetail as string )
     gTestCount += 1
@@ -449,6 +454,30 @@ sub CNumericUpDown_SelfTest()
         CTextBox_GetBorderWidth( hBox ) = 0, "width=" & str(CTextBox_GetBorderWidth(hBox)) )
     SelfTest_Check( "the embedded CTextBox is in numeric mode", _
         CTextBox_GetNumericMode( hBox ) = true, "" )
+
+    ' ---- the number is centred, and stays centred -----------------------------------------
+    ' This used to be the one thing on the "only a human can confirm it" list, because the
+    ' control sent EM_SETPARAFORMAT itself and had no way to check the result. It now goes
+    ' through CTextBox_SetTextAlign, and the RichEdit can simply be ASKED -- which is the
+    ' only witness worth asking, since the earlier version was silently doing nothing.
+    SelfTest_Check( "the value field is set to centre alignment", _
+        CTextBox_GetTextAlign( hBox ) = TXT_ALIGN_CENTER, _
+        "align=" & str(CTextBox_GetTextAlign(hBox)) )
+
+    dim pfNum as PARAFORMAT
+    pfNum.cbSize = sizeof(PARAFORMAT)
+    RichEdit_GetParaFormat( CTextBox_GetRichEditHandle(hBox), @pfNum )
+    SelfTest_Check( "the RICHEDIT really is centred (asked, not assumed)", _
+        pfNum.wAlignment = PFA_CENTER, _
+        "wAlignment=" & str(pfNum.wAlignment) & " PFA_CENTER=" & str(PFA_CENTER) )
+
+    ' Every value write replaces the whole buffer, so this is the assertion that the centring
+    ' is not quietly lost the first time the user presses "+".
+    CNumericUpDown_SetValue( h, 1234.0 )
+    pfNum.cbSize = sizeof(PARAFORMAT)
+    RichEdit_GetParaFormat( CTextBox_GetRichEditHandle(hBox), @pfNum )
+    SelfTest_Check( "the centring SURVIVES a value change", _
+        pfNum.wAlignment = PFA_CENTER, "wAlignment=" & str(pfNum.wAlignment) )
 
     dim as RECT rcChild
     GetWindowRect( hBox, @rcChild )

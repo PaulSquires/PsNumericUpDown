@@ -289,10 +289,26 @@ sub CNumericUpDown_FlatPaintCallback( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
         end if
     next
 
-    ' A square focus frame instead of a rounded one.
+    ' A square frame instead of a rounded one, focus-coloured when focused.
+    '
+    ' PaintRoundOutline WITH CURVATURE 0, and NOT PaintBorderRect. PaintBorderRect delegates
+    ' to PaintRectFactory, which fills the rect with the current BACK colour unconditionally
+    ' -- the fill is not gated on anything, only the stroke is. Used here, over pixels this
+    ' callback has just drawn, it flooded the entire control with whatever colour the last
+    ' glyph happened to use and erased the cells, the dividers and both glyphs, leaving a
+    ' solid block with only the RichEdit's value showing through (the child paints itself
+    ' afterwards, and WS_CLIPCHILDREN keeps its rect out of our DC).
+    '
+    ' PaintRoundOutline exists for exactly this -- its own header says "stroke a rounded rect
+    ' WITHOUT filling it ... a focus ring around an already-painted control being the case
+    ' that needed it". Curvature 0 gives square corners.
+    '
+    ' This is the third time this defect has been written in this control family (CComboBox
+    ' and CToggle first), every time by copying a sibling's paint callback without
+    ' re-checking it. SelfTest_MinusCellTones now asserts against it.
     dim as RECT rcFrame = p->rcFrame
     p->b->SetPenColor( iif( p->isFocused, theme.FocusAccent, theme.Divider ) )
-    p->b->PaintBorderRect( @rcFrame, 1 )
+    p->b->PaintRoundOutline( @rcFrame, 0, 1 )
 
 end sub
 
@@ -339,6 +355,100 @@ private sub SelfTest_SizeTo( byval h as HWND, byval w as long, byval hgt as long
     cw = rc.right - rc.left
     ch = rc.bottom - rc.top
 end sub
+
+' ========================================================================================
+' Count the DISTINCT colours the demo's CUSTOM PAINTER produces inside the minus button's
+' interior, by driving it into an offscreen buffer exactly as a WM_PAINT would.
+'
+' WHAT THIS CATCHES, and why it is worth a permanent assertion rather than a throwaway probe:
+' every primitive that fills-and-strokes (PaintBorderRect, PaintRoundBorderRect) goes through
+' PaintRectFactory, which fills with the CURRENT BACK COLOUR unconditionally -- the fill is
+' not gated on anything, only the stroke is. So one of those used as a FRAME, over pixels you
+' have already drawn, floods the whole rect with whatever colour was last set and erases the
+' lot. The control still paints, still reports no error, and every geometry assertion in this
+' file still passes; the row just renders as a solid block.
+'
+' That exact defect has now been found in THREE sibling repos (CComboBox and CToggle before
+' this one), every time in a paint callback copied from a sibling without being re-checked --
+' the copy-a-sibling trap CLAUDE.md warns about. It is invisible to every other kind of test,
+' so it gets one of its own here.
+'
+' The cell interior is scanned inset by 2px so the frame's own stroke is excluded: a flooded
+' cell must read as exactly ONE colour, and a correct one has at least the cell fill plus the
+' glyph bar.
+' ========================================================================================
+private function SelfTest_MinusCellTones( byval h as HWND ) as long
+    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(h)
+    if pNud = 0 then return 0
+
+    dim as RECT rcClient
+    GetClientRect( h, @rcClient )
+    if (rcClient.right <= rcClient.left) orelse (rcClient.bottom <= rcClient.top) then return 0
+
+    dim as HDC hdc = GetDC(h)
+    if hdc = 0 then return 0
+
+    dim as CBufferPaint b
+    b.BeginDoubleBuffer( h, hdc, rcClient )
+    b.SetBackColor( pNud->colors.BackColor )
+    b.PaintClientRect()
+
+    ' EVERY rect must be populated. A zeroed rect makes PaintRectFactory bail on a negative
+    ' extent, and then a broken callback and a correct one measure identically -- which is
+    ' how CComboBox's first attempt at this probe managed to prove nothing at all.
+    dim p as CNUMERICUPDOWN_PAINTINFO
+    p.hCtrl       = h
+    p.b           = @b
+    p.rcClient    = rcClient
+    p.rcFrame     = pNud->rcFrame
+    p.rcMinus     = pNud->rcMinus
+    p.rcDiv1      = pNud->rcDiv1
+    p.rcValue     = pNud->rcValue
+    p.rcDiv2      = pNud->rcDiv2
+    p.rcPlus      = pNud->rcPlus
+    p.rcMinusBar  = pNud->rcMinusBar
+    p.rcPlusBarH  = pNud->rcPlusBarH
+    p.rcPlusBarV  = pNud->rcPlusBarV
+    p.hotPart     = NUD_PART_NONE
+    p.pressedPart = NUD_PART_NONE
+    p.isEnabled   = true
+    p.isFocused   = false
+    ' The screenshot's state: sitting AT the maximum, so the plus glyph is the disabled
+    ' colour -- which is precisely the colour the flood bug painted the whole control with.
+    p.bAtMin      = false
+    p.bAtMax      = true
+    p.nValue      = 3.0
+
+    CNumericUpDown_FlatPaintCallback( @p )
+
+    dim as HDC memDC = b.getMemDC()
+    dim as long nDistinct = 0
+    if memDC then
+        dim as COLORREF seen(0 to 63)
+        for y as long = p.rcMinus.top + 2 to p.rcMinus.bottom - 3
+            for x as long = p.rcMinus.left + 2 to p.rcMinus.right - 3
+                dim as COLORREF c = GetPixel( memDC, x, y )
+                if c = CLR_INVALID then continue for
+                dim as boolean bFound = false
+                for i as long = 0 to nDistinct - 1
+                    if seen(i) = c then
+                        bFound = true
+                        exit for
+                    end if
+                next
+                if (bFound = false) andalso (nDistinct <= ubound(seen)) then
+                    seen(nDistinct) = c
+                    nDistinct += 1
+                end if
+            next
+        next
+    end if
+
+    b.EndDoubleBuffer()
+    ReleaseDC( h, hdc )
+    return nDistinct
+end function
+
 
 private function RectW( byref rc as RECT ) as long
     return rc.right - rc.left
@@ -498,6 +608,16 @@ sub CNumericUpDown_SelfTest()
     ptOutside.x = cw + 20 : ptOutside.y = 5
     SelfTest_Check( "HitTest returns NONE outside the client", _
         CNumericUpDown_HitTest( h, ptOutside ) = NUD_PART_NONE, "" )
+
+    ' ---- the custom painter actually draws something ------------------------------------
+    ' Drives the demo's own paint callback offscreen and counts colours in the minus cell.
+    ' ONE colour means the cell was flooded -- see SelfTest_MinusCellTones for the whole
+    ' story. This is the only assertion in the file that looks at pixels, and it exists
+    ' because the defect it catches is invisible to every assertion that looks at numbers.
+    dim as long nTones = SelfTest_MinusCellTones( h )
+    SelfTest_Check( "the custom painter's frame does not flood the button cells", _
+        nTones > 1, "distinct colours in the minus cell = " & str(nTones) & _
+                    "  (1 = flooded; a drawn cell has a fill AND a glyph)" )
 
     ' ---- overflow: honest and clipped, never squeezed ------------------------------------
     SelfTest_SizeTo( h, (bw * 2) + (dt * 2) - 10, 34, cw, ch )

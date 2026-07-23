@@ -36,7 +36,7 @@ Build (the toolchain is not on `PATH`, and AfxNova resolves relative to the work
 C:\dev\tiko_editor\toolchains\FreeBASIC-1.10.1-winlibs-gcc-9.3.0\fbc64.exe -i "C:\dev" main.bas main.rc
 ```
 
-or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 51 assertions,
+or just `build.bat`. Run the self-test with `CNUMERICUPDOWN_SELFTEST=1` — 52 assertions,
 geometry and value arithmetic.
 
 Include order — the price of embedding a real editing control:
@@ -284,6 +284,23 @@ It forwards to `CTextBox_FilterMessage`, so an app already calling that is cover
 and calling both is harmless. It exists so a host adopting this control has **one** call to
 add rather than having to know there is a CTextBox inside it with a CPopupMenu inside that.
 
+### One trap when writing a paint callback
+
+Draw the frame with **`PaintRoundOutline`** (curvature 0 for square corners), never
+`PaintBorderRect` or `PaintRoundBorderRect`. Those delegate to `PaintRectFactory`, which
+**fills the rect with the current back colour unconditionally** — the fill is not gated on
+anything, only the stroke is. Used for a frame, over pixels you have just drawn, it floods the
+whole control with whatever colour you last set and erases the cells, the dividers and the
+glyphs, leaving a solid block with only the value showing through.
+
+Nothing reports an error, and every geometry assertion still passes. This exact defect has now
+been written three times in this control family (`CComboBox`, `CToggle`, and the demo callback
+here), every time by copying a sibling's paint callback without re-checking it.
+`SelfTest_MinusCellTones` asserts against it: it drives the demo's callback into an offscreen
+buffer and counts colours inside the minus cell, where **one** colour means flooded.
+
+The same shape bites anything drawn *over* existing pixels, not just the frame.
+
 ## Two traps worth knowing
 
 **Capture is taken, but not for the reason its siblings take it.** A spinner **steps on the
@@ -312,7 +329,7 @@ of* a second `WM_LBUTTONDOWN`, and a user double-clicking `+` to add two would g
 ## Verification
 
 - Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — 51 assertions, all passing: every rect at a comfortable size
+- `CNUMERICUPDOWN_SELFTEST=1` — 52 assertions, all passing: every rect at a comfortable size
   and at one too narrow to fit, the cells and dividers tiling the client exactly, the glyph
   bars centred and the `+` cross symmetric, the child positioned exactly on `rcValue`, a
   hit-test round trip over every part, `GetIdealSize` against an independently measured

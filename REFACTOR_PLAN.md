@@ -191,7 +191,7 @@ for min/max would break ordinary editing in a field the user can type into.
 ## Verification, and its limits
 
 - Builds clean with `-w all`, zero warnings.
-- `CNUMERICUPDOWN_SELFTEST=1` — **51 assertions, 0 failed**. Geometry at a comfortable size and
+- `CNUMERICUPDOWN_SELFTEST=1` — **52 assertions, 0 failed**. Geometry at a comfortable size and
   at one too narrow to fit; cells and dividers tiling the client exactly; glyph centring and
   cross symmetry; the child positioned exactly on `rcValue`; a hit-test round trip over every
   part; `GetIdealSize` against an independently measured oracle (the widest formatted value at

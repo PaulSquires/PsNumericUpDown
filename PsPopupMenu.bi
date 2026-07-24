@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include once "CBufferPaint.bi"
+#include once "PsBufferPaint.bi"
 
 ' Safety-net poll timer, run on the ROOT of an open popup chain only. It does two jobs:
 '   1. Hover net: WM_MOUSELEAVE (TME_LEAVE) is not reliably delivered on fast exits, so
@@ -10,33 +10,33 @@
 '      so they cannot see focus loss themselves, and WM_ACTIVATEAPP is SENT to the host,
 '      never pumped -- the message filter cannot catch it. Polling GetForegroundWindow
 '      closes the chain when the user alt-tabs away. A host wanting INSTANT dismissal
-'      calls CPopupMenu_CloseChain / CMenuBar_CloseMenu from its own WM_ACTIVATEAPP.
+'      calls PsPopupMenu_CloseChain / PsMenuBar_CloseMenu from its own WM_ACTIVATEAPP.
 ' Timer ids are per-window, so every instance can share this id.
 #define IDT_CPOPUPMENU_POLL    &hCB41
-#define CPOPUPMENU_POLL_MS     100
+#define PSPOPUPMENU_POLL_MS     100
 
 ' How long the cursor rests on an item before its submenu opens (or a stale sibling
 ' submenu closes). A click opens the submenu immediately; hover waits this long.
-#define CPOPUPMENU_HOVER_MS    250
+#define PSPOPUPMENU_HOVER_MS    250
 
 ' Default geometry, DPI-scaled once at Create; the setters take raw pixels thereafter.
-#define CPOPUPMENU_DEFAULT_ITEMHEIGHT   24   ' command row height (tiko compact mode = 20)
+#define PSPOPUPMENU_DEFAULT_ITEMHEIGHT   24   ' command row height (tiko compact mode = 20)
 ' Separator rows are SHORT -- a rule with a little air, not a full-height row. Rows are
 ' therefore not all the same height, which is why LayoutItems walks a running y instead
 ' of multiplying by an index. Everything downstream (hit-testing, painting, submenu
 ' anchoring) reads the rects, so nothing else had to learn about the difference.
-#define CPOPUPMENU_DEFAULT_SEPHEIGHT     9   ' separator row height
+#define PSPOPUPMENU_DEFAULT_SEPHEIGHT     9   ' separator row height
 ' Thickness of the rule drawn inside that row. NOT DPI-scaled at Create, unlike every
 ' other geometry input here: a hairline divider should stay a hairline at 150% rather
 ' than growing into a bar. A host that wants it scaled scales it itself.
-#define CPOPUPMENU_DEFAULT_SEPTHICKNESS  1
-#define CPOPUPMENU_DEFAULT_CHECKCOL     30   ' left gutter column for the check glyph
-#define CPOPUPMENU_DEFAULT_CHEVRONCOL   20   ' right column for the submenu chevron
-#define CPOPUPMENU_DEFAULT_ACCELGAP     24   ' minimum gap between caption and accel text
-#define CPOPUPMENU_DEFAULT_HPADDING     2    ' window padding left/right of the rows
-#define CPOPUPMENU_DEFAULT_VPADDING     8    ' window padding above/below the rows
+#define PSPOPUPMENU_DEFAULT_SEPTHICKNESS  1
+#define PSPOPUPMENU_DEFAULT_CHECKCOL     30   ' left gutter column for the check glyph
+#define PSPOPUPMENU_DEFAULT_CHEVRONCOL   20   ' right column for the submenu chevron
+#define PSPOPUPMENU_DEFAULT_ACCELGAP     24   ' minimum gap between caption and accel text
+#define PSPOPUPMENU_DEFAULT_HPADDING     2    ' window padding left/right of the rows
+#define PSPOPUPMENU_DEFAULT_VPADDING     8    ' window padding above/below the rows
 
-' Anchor alignment for CPopupMenu_ShowForRect (rcAnchor is in SCREEN pixels):
+' Anchor alignment for PsPopupMenu_ShowForRect (rcAnchor is in SCREEN pixels):
 '   PM_ALIGN_BELOW: a menubar dropdown -- left edges align, top = rcAnchor.bottom - 1
 '                   (minus one so the popup border merges with the bar, tiko-style).
 '   PM_ALIGN_RIGHT: a submenu -- left = rcAnchor.right, top = rcAnchor.top; flips to
@@ -44,7 +44,7 @@
 #define PM_ALIGN_BELOW   1
 #define PM_ALIGN_RIGHT   2
 
-' Notifications SENT BY a popup chain's ROOT to its notify window (CMenuBar registers
+' Notifications SENT BY a popup chain's ROOT to its notify window (PsMenuBar registers
 ' itself on its dropdowns; a bar-less host may SetNotifyWindow too, or just use the
 ' callbacks -- one implementation, two doors).
 '   CPM_NOTIFY_COMMAND: an enabled command item was executed (mouse or Enter). The chain
@@ -53,7 +53,7 @@
 '   CPM_NOTIFY_CLOSED:  the chain was dismissed by USER interaction without executing
 '                       anything. wParam = 1 when closed by Escape at the root level,
 '                       0 for every other dismissal (outside click, foreground loss).
-'                       CMenuBar uses that distinction: Escape keeps the bar item
+'                       PsMenuBar uses that distinction: Escape keeps the bar item
 '                       highlighted (keyboard mode), an outside click clears it.
 '                       lParam = the chain's root popup HWND. Programmatic Hide /
 '                       CloseChain / CloseMenu send NOTHING (setters are silent; only
@@ -63,10 +63,10 @@
 
 
 ' One row of a popup menu. A separator is stored as a row (id 0); a submenu parent is a
-' row whose hSubMenu holds another CPopupMenu window -- attachment is what makes the
+' row whose hSubMenu holds another PsPopupMenu window -- attachment is what makes the
 ' menu tree recursive, so nesting depth falls out of the data model rather than being a
 ' hard-coded level count.
-type CPOPUPMENU_ITEM
+type PSPOPUPMENU_ITEM
     id          as long          ' host command id (0 for separators). The by-id API
                                  ' searches this menu then recurses into attached
                                  ' submenus, so ids should be unique across the tree.
@@ -76,7 +76,7 @@ type CPOPUPMENU_ITEM
     isSeparator as boolean = false
     isDisabled  as boolean = false
     isChecked   as boolean = false
-    hSubMenu    as HWND          ' attached CPopupMenu window. OWNED once attached: the
+    hSubMenu    as HWND          ' attached PsPopupMenu window. OWNED once attached: the
                                  ' parent destroys it when it is itself destroyed.
     ' --- DERIVED by LayoutItems, never set from outside. ---
     rc          as RECT          ' full row rect, client coordinates
@@ -85,7 +85,7 @@ end type
 ' Colors for the built-in painter. Copied on Set (the struct stays yours). Disabled
 ' rows use ForeColorDisabled over the NORMAL BackColor -- a disabled row never lights
 ' up, so no separate disabled background exists; use the paint callback if you need one.
-type CPOPUPMENU_COLORS
+type PSPOPUPMENU_COLORS
     BackColor         as COLORREF    ' window panel + normal row background
     ForeColor         as COLORREF
     BackColorHot      as COLORREF    ' the selected/hovered row
@@ -110,11 +110,11 @@ end type
 ' for. Draw with the same fonts you handed to SetFonts -- the widths were measured with
 ' them. The control paints the window background and its border chrome itself (border
 ' AFTER the callbacks, so chrome is authoritative no matter what a callback paints).
-type CPOPUPMENU_PAINTINFO
+type PSPOPUPMENU_PAINTINFO
     hPopup      as HWND                   ' the control, so the callback can query it
     itemID      as long                   ' row index within this popup
     id          as long                   ' the row's command id (0 for separators)
-    b           as CBufferPaint ptr    ' the control's buffer for this repaint
+    b           as PsBufferPaint ptr    ' the control's buffer for this repaint
     ' --- Geometry, precomputed. rcCheck/rcText/rcChevron partition rc left-to-right. ---
     rc          as RECT                   ' the full row: fill THIS
     rcCheck     as RECT                   ' left gutter (check glyph)
@@ -142,13 +142,13 @@ type PM_SelectCallbackSub as sub( byval hPopup as HWND, byval id as long )
 type PM_InitPopupCallbackSub as sub( byval hPopup as HWND )
 
 ' Draw one row, INSTEAD OF the built-in painter (all rows or none -- setting the
-' callback takes over every row of that popup). See CPOPUPMENU_PAINTINFO.
-type PM_PaintItemCallbackSub as sub( byval p as CPOPUPMENU_PAINTINFO ptr )
+' callback takes over every row of that popup). See PSPOPUPMENU_PAINTINFO.
+type PM_PaintItemCallbackSub as sub( byval p as PSPOPUPMENU_PAINTINFO ptr )
 
 
-type CPOPUPMENU
+type PSPOPUPMENU
     hWin              as HWND
-    items(any)        as CPOPUPMENU_ITEM
+    items(any)        as PSPOPUPMENU_ITEM
     itemCount         as long = 0
     idc_Popup         as long = 0
     ' The current selection. Menu semantics: hover IS selection (one highlight moved by
@@ -163,7 +163,7 @@ type CPOPUPMENU
     ' legitimately sits anywhere, and clearing would wipe the highlight ~100ms after
     ' every keypress (the bug that motivated this flag).
     bHoverSel         as boolean = false
-    colors            as CPOPUPMENU_COLORS
+    colors            as PSPOPUPMENU_COLORS
     ' Caller-supplied fonts (caller owns them). NOT named hFont: FreeBASIC is
     ' case-insensitive, so a member called hFont would shadow the TYPE name HFONT inside
     ' every member procedure of this type (see C:\dev\Learnings.md).
@@ -172,14 +172,14 @@ type CPOPUPMENU
     wszCheckGlyph     as DWSTRING         ' default chr(&h2713) "checkmark"
     wszChevronGlyph   as DWSTRING         ' default chr(&h203A) "single right angle quote"
     ' --- Geometry inputs, all pixels, DPI-scaled once at Create. ---
-    nItemHeight       as long = CPOPUPMENU_DEFAULT_ITEMHEIGHT
-    nSeparatorHeight  as long = CPOPUPMENU_DEFAULT_SEPHEIGHT   ' separator rows only
-    nSeparatorThickness as long = CPOPUPMENU_DEFAULT_SEPTHICKNESS  ' the rule's own weight
-    nCheckColWidth    as long = CPOPUPMENU_DEFAULT_CHECKCOL
-    nChevronColWidth  as long = CPOPUPMENU_DEFAULT_CHEVRONCOL
-    nAccelGap         as long = CPOPUPMENU_DEFAULT_ACCELGAP
-    nHPadding         as long = CPOPUPMENU_DEFAULT_HPADDING
-    nVPadding         as long = CPOPUPMENU_DEFAULT_VPADDING
+    nItemHeight       as long = PSPOPUPMENU_DEFAULT_ITEMHEIGHT
+    nSeparatorHeight  as long = PSPOPUPMENU_DEFAULT_SEPHEIGHT   ' separator rows only
+    nSeparatorThickness as long = PSPOPUPMENU_DEFAULT_SEPTHICKNESS  ' the rule's own weight
+    nCheckColWidth    as long = PSPOPUPMENU_DEFAULT_CHECKCOL
+    nChevronColWidth  as long = PSPOPUPMENU_DEFAULT_CHEVRONCOL
+    nAccelGap         as long = PSPOPUPMENU_DEFAULT_ACCELGAP
+    nHPadding         as long = PSPOPUPMENU_DEFAULT_HPADDING
+    nVPadding         as long = PSPOPUPMENU_DEFAULT_VPADDING
     nBorderWidth      as long = 1
     nMinWidth         as long = 0         ' floor on CONTENT width; 0 = auto (MRU menus)
     ' --- Layout. Row rects and the ideal window size are derived, never set;
@@ -219,11 +219,11 @@ end type
 ' PUBLIC API
 ' ========================================================================================
 '
-' A FLOATING MENU WINDOW, USABLE ALONE OR UNDER CMenuBar
-'   One CPopupMenu is one long-lived hidden WS_POPUP window: create it once, fill it
+' A FLOATING MENU WINDOW, USABLE ALONE OR UNDER PsMenuBar
+'   One PsPopupMenu is one long-lived hidden WS_POPUP window: create it once, fill it
 '   with items, then Show/Hide it as often as needed (no create-per-open). It never
 '   takes focus or activation -- the host window's title bar stays active while a menu
-'   is up, and keyboard input keeps flowing to the host, where CPopupMenu_FilterMessage
+'   is up, and keyboard input keeps flowing to the host, where PsPopupMenu_FilterMessage
 '   (called from the host's message pump, IsDialogMessage-style) intercepts it.
 '
 ' THE MESSAGE-PUMP CONTRACT (this is not optional)
@@ -231,9 +231,9 @@ end type
 '   that shows a popup without calling the filter in its pump gets a menu that opens
 '   and paints but cannot be keyboard-driven and never dismisses on an outside click:
 '       do while GetMessage(@uMsg, null, 0, 0)
-'           if CPopupMenu_FilterMessage( hMyMenu, @uMsg ) then continue do
+'           if PsPopupMenu_FilterMessage( hMyMenu, @uMsg ) then continue do
 '           ...TranslateMessage/DispatchMessage...
-'   (Under CMenuBar, call CMenuBar_FilterMessage instead -- it wraps this one.)
+'   (Under PsMenuBar, call PsMenuBar_FilterMessage instead -- it wraps this one.)
 '
 ' THE CONTROL HANDLE
 '   A real HWND on purpose (not an opaque type): the family convention, and Hide/Show
@@ -241,7 +241,7 @@ end type
 '
 ' LIFETIME AND OWNERSHIP
 '   The control frees itself when its window is destroyed. Attaching a popup to a
-'   parent (CPopupMenu_SetItemSubMenu / CMenuBar_SetDropDown) TRANSFERS OWNERSHIP: the
+'   parent (PsPopupMenu_SetItemSubMenu / PsMenuBar_SetDropDown) TRANSFERS OWNERSHIP: the
 '   parent destroys attached children when it is destroyed, so one DestroyWindow on the
 '   bar unwinds the whole menu tree. Never attach the same popup to two parents.
 '   Fonts you pass in stay yours.
@@ -251,30 +251,30 @@ end type
 ' Show. CtrlID is stored for the host's own bookkeeping (there is no parent to route
 ' notifications by id).
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as HWND
+declare function PsPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as HWND
 
 ' ----------------------------------------------------------------------------------------
 ' Items. AddItem/AddSeparator append and return the new row index (or -1). Everything
 ' addressed "byval id" searches THIS menu first, then recurses into attached submenus
 ' (first match wins) -- so a host can flip any state in the tree from the root.
 ' Programmatic mutators are SILENT (no callbacks, no notifications).
-'   SetItemSubMenu attaches a CPopupMenu window to an item (ownership transfers);
+'   SetItemSubMenu attaches a PsPopupMenu window to an item (ownership transfers);
 '   attaching over an existing submenu DESTROYS the old one; hSubMenu = 0 detaches
 '   WITHOUT destroying (ownership returns to the caller).
 '   DeleteItem / Clear destroy any attached submenu windows of the removed rows.
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_AddItem( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "", byval bDisabled as boolean = false, byval bChecked as boolean = false ) as long
-declare function CPopupMenu_AddSeparator( byval hPopup as HWND ) as long
-declare function CPopupMenu_GetItemCount( byval hPopup as HWND ) as long
-declare function CPopupMenu_SetItemSubMenu( byval hPopup as HWND, byval id as long, byval hSubMenu as HWND ) as boolean
-declare function CPopupMenu_GetItemSubMenu( byval hPopup as HWND, byval id as long ) as HWND
-declare function CPopupMenu_DeleteItem( byval hPopup as HWND, byval id as long ) as boolean
-declare sub      CPopupMenu_Clear( byval hPopup as HWND )
-declare function CPopupMenu_SetItemEnabled( byval hPopup as HWND, byval id as long, byval bEnabled as boolean ) as boolean
-declare function CPopupMenu_GetItemEnabled( byval hPopup as HWND, byval id as long ) as boolean
-declare function CPopupMenu_SetItemChecked( byval hPopup as HWND, byval id as long, byval bChecked as boolean ) as boolean
-declare function CPopupMenu_GetItemChecked( byval hPopup as HWND, byval id as long ) as boolean
-declare function CPopupMenu_SetItemText( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "" ) as boolean
+declare function PsPopupMenu_AddItem( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "", byval bDisabled as boolean = false, byval bChecked as boolean = false ) as long
+declare function PsPopupMenu_AddSeparator( byval hPopup as HWND ) as long
+declare function PsPopupMenu_GetItemCount( byval hPopup as HWND ) as long
+declare function PsPopupMenu_SetItemSubMenu( byval hPopup as HWND, byval id as long, byval hSubMenu as HWND ) as boolean
+declare function PsPopupMenu_GetItemSubMenu( byval hPopup as HWND, byval id as long ) as HWND
+declare function PsPopupMenu_DeleteItem( byval hPopup as HWND, byval id as long ) as boolean
+declare sub      PsPopupMenu_Clear( byval hPopup as HWND )
+declare function PsPopupMenu_SetItemEnabled( byval hPopup as HWND, byval id as long, byval bEnabled as boolean ) as boolean
+declare function PsPopupMenu_GetItemEnabled( byval hPopup as HWND, byval id as long ) as boolean
+declare function PsPopupMenu_SetItemChecked( byval hPopup as HWND, byval id as long, byval bChecked as boolean ) as boolean
+declare function PsPopupMenu_GetItemChecked( byval hPopup as HWND, byval id as long ) as boolean
+declare function PsPopupMenu_SetItemText( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "" ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Geometry (derived; the queries force a pending layout so results are always current).
@@ -288,20 +288,20 @@ declare function CPopupMenu_SetItemText( byval hPopup as HWND, byval id as long,
 ' compact mode). Set the separator height equal to the item height to get the old
 ' uniform-row look back.
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_GetItemRect( byval hPopup as HWND, byval idx as long, byref rc as RECT ) as boolean
+declare function PsPopupMenu_GetItemRect( byval hPopup as HWND, byval idx as long, byref rc as RECT ) as boolean
 ' Which row is this CLIENT point over? -1 for none (padding, border, or outside). The
 ' inverse of GetItemRect, and the same routine the mouse handlers use -- exposed so the
 ' rect/hit-test agreement can be asserted rather than eyeballed now that rows differ in
 ' height.
-declare function CPopupMenu_HitTest( byval hPopup as HWND, byval x as long, byval y as long ) as long
-declare function CPopupMenu_GetIdealSize( byval hPopup as HWND, byref nWidth as long, byref nHeight as long ) as boolean
-declare function CPopupMenu_SetMinWidth( byval hPopup as HWND, byval nMinWidth as long ) as boolean
-declare sub      CPopupMenu_SetItemHeight( byval hPopup as HWND, byval nItemHeight as long )
+declare function PsPopupMenu_HitTest( byval hPopup as HWND, byval x as long, byval y as long ) as long
+declare function PsPopupMenu_GetIdealSize( byval hPopup as HWND, byref nWidth as long, byref nHeight as long ) as boolean
+declare function PsPopupMenu_SetMinWidth( byval hPopup as HWND, byval nMinWidth as long ) as boolean
+declare sub      PsPopupMenu_SetItemHeight( byval hPopup as HWND, byval nItemHeight as long )
 ' SetSeparatorHeight is the ROW's height (the air around the rule); SetSeparatorThickness
 ' is the rule's own weight in pixels. They are independent: a thick rule in a short row
 ' and a hairline in a tall row are both reasonable. Thickness is not DPI-scaled for you.
-declare sub      CPopupMenu_SetSeparatorHeight( byval hPopup as HWND, byval nSeparatorHeight as long )
-declare sub      CPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval nThickness as long )
+declare sub      PsPopupMenu_SetSeparatorHeight( byval hPopup as HWND, byval nSeparatorHeight as long )
+declare sub      PsPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval nThickness as long )
 
 ' ----------------------------------------------------------------------------------------
 ' Appearance. Fonts are borrowed, never owned: keep them alive and destroy them
@@ -309,9 +309,9 @@ declare sub      CPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval n
 ' hGlyphFont (tiko passes Segoe Fluent Icons glyphs + that font); the defaults are
 ' plain Unicode characters that render in any text font.
 ' ----------------------------------------------------------------------------------------
-declare sub      CPopupMenu_SetColors( byval hPopup as HWND, byval pColors as CPOPUPMENU_COLORS ptr )
-declare sub      CPopupMenu_SetFonts( byval hPopup as HWND, byval hTextFont as HFONT, byval hGlyphFont as HFONT = 0 )
-declare sub      CPopupMenu_SetGlyphs( byval hPopup as HWND, byval wszCheck as DWSTRING, byval wszChevron as DWSTRING )
+declare sub      PsPopupMenu_SetColors( byval hPopup as HWND, byval pColors as PSPOPUPMENU_COLORS ptr )
+declare sub      PsPopupMenu_SetFonts( byval hPopup as HWND, byval hTextFont as HFONT, byval hGlyphFont as HFONT = 0 )
+declare sub      PsPopupMenu_SetGlyphs( byval hPopup as HWND, byval wszCheck as DWSTRING, byval wszChevron as DWSTRING )
 
 ' ----------------------------------------------------------------------------------------
 ' Show / dismiss. Coordinates are SCREEN pixels; both Show forms are non-blocking
@@ -321,25 +321,25 @@ declare sub      CPopupMenu_SetGlyphs( byval hPopup as HWND, byval wszCheck as D
 ' WITHOUT activation. Showing a popup as a root closes any other open chain first.
 '   Show:        at a point (context-menu door; also selects nothing).
 '   ShowForRect: against an anchor rect (PM_ALIGN_BELOW = dropdown, PM_ALIGN_RIGHT =
-'                submenu). CMenuBar uses this; hosts rarely need it directly.
+'                submenu). PsMenuBar uses this; hosts rarely need it directly.
 '   Hide:        this level and any open descendants. SILENT.
 '   CloseChain:  the whole open chain containing hPopup (any level). SILENT.
 '   IsOpen:      is this popup currently visible?
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_Show( byval hPopup as HWND, byval x as long, byval y as long ) as boolean
-declare function CPopupMenu_ShowForRect( byval hPopup as HWND, byval rcAnchor as RECT, byval nAlign as long ) as boolean
-declare sub      CPopupMenu_Hide( byval hPopup as HWND )
-declare sub      CPopupMenu_CloseChain( byval hPopup as HWND )
-declare function CPopupMenu_IsOpen( byval hPopup as HWND ) as boolean
+declare function PsPopupMenu_Show( byval hPopup as HWND, byval x as long, byval y as long ) as boolean
+declare function PsPopupMenu_ShowForRect( byval hPopup as HWND, byval rcAnchor as RECT, byval nAlign as long ) as boolean
+declare sub      PsPopupMenu_Hide( byval hPopup as HWND )
+declare sub      PsPopupMenu_CloseChain( byval hPopup as HWND )
+declare function PsPopupMenu_IsOpen( byval hPopup as HWND ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Selection. SILENT (only user interaction fires callbacks). SetCurSel accepts -1 to
 ' clear; SelectFirst puts the selection on the first selectable row (skipping
 ' separators and disabled rows) -- what keyboard-opening a menu wants.
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_GetCurSel( byval hPopup as HWND ) as long
-declare function CPopupMenu_SetCurSel( byval hPopup as HWND, byval idx as long ) as boolean
-declare function CPopupMenu_SelectFirst( byval hPopup as HWND ) as boolean
+declare function PsPopupMenu_GetCurSel( byval hPopup as HWND ) as long
+declare function PsPopupMenu_SetCurSel( byval hPopup as HWND, byval idx as long ) as boolean
+declare function PsPopupMenu_SelectFirst( byval hPopup as HWND ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Plumbing.
@@ -351,11 +351,11 @@ declare function CPopupMenu_SelectFirst( byval hPopup as HWND ) as boolean
 '                      WM_SYSKEY* family, which stays the host's (Alt handling).
 '                      Outside-click dismissal returns FALSE on purpose: the click
 '                      that dismissed the menu still reaches its target, tiko-style.
-'   SetNotifyWindow  - where CPM_NOTIFY_* messages go (CMenuBar sets itself here).
+'   SetNotifyWindow  - where CPM_NOTIFY_* messages go (PsMenuBar sets itself here).
 '   Callbacks        - see the type declarations above for each contract.
 ' ----------------------------------------------------------------------------------------
-declare function CPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr ) as boolean
-declare sub      CPopupMenu_SetNotifyWindow( byval hPopup as HWND, byval hNotifyWnd as HWND )
-declare sub      CPopupMenu_SetSelectCallback( byval hPopup as HWND, byval usersub as PM_SelectCallbackSub )
-declare sub      CPopupMenu_SetInitPopupCallback( byval hPopup as HWND, byval usersub as PM_InitPopupCallbackSub )
-declare sub      CPopupMenu_SetPaintItemCallback( byval hPopup as HWND, byval usersub as PM_PaintItemCallbackSub )
+declare function PsPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr ) as boolean
+declare sub      PsPopupMenu_SetNotifyWindow( byval hPopup as HWND, byval hNotifyWnd as HWND )
+declare sub      PsPopupMenu_SetSelectCallback( byval hPopup as HWND, byval usersub as PM_SelectCallbackSub )
+declare sub      PsPopupMenu_SetInitPopupCallback( byval hPopup as HWND, byval usersub as PM_InitPopupCallbackSub )
+declare sub      PsPopupMenu_SetPaintItemCallback( byval hPopup as HWND, byval usersub as PM_PaintItemCallbackSub )

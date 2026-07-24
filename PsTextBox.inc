@@ -1,6 +1,6 @@
 
 ''
-''  CTextBox.inc
+''  PsTextBox.inc
 ''
 ''  Textbox custom control built on a RichEdit50W child -- single-line by default,
 ''  optionally multiline (word-wrapped, creation-time choice). RichEdit rather
@@ -8,17 +8,17 @@
 ''  per-control colors (EM_SETCHARFORMAT / EM_SETBKGNDCOLOR) without owner-draw.
 ''  The container owns the chrome (border, rounded corners, outer fill) and the
 ''  geometry; the RichEdit child does all the editing. A multiline control shows no
-''  native scrollbar -- an external scrollbar (CVScrollBar) is driven through
+''  native scrollbar -- an external scrollbar (PsVScrollBar) is driven through
 ''  ScrollChangedCallback / GetVScrollInfo / ScrollToLine.
 ''
 
-#include once "CTextBox.bi"
+#include once "PsTextBox.bi"
 
 
-function GetTextBoxPointer( byval hTextBoxControl as HWND ) as CTEXTBOX ptr
+function GetTextBoxPointer( byval hTextBoxControl as HWND ) as PSTEXTBOX ptr
     dim pWindow as CWindow ptr = AfxCWindowPtr(hTextBoxControl)
-    dim as CTEXTBOX ptr pTextBox = null
-    if pWindow then pTextBox = cast( CTEXTBOX ptr, pWindow->UserData(0) )
+    dim as PSTEXTBOX ptr pTextBox = null
+    if pWindow then pTextBox = cast( PSTEXTBOX ptr, pWindow->UserData(0) )
     return pTextBox
 end function
 
@@ -28,39 +28,39 @@ end function
 '
 ' Replaces the CreatePopupMenu/TrackPopupMenu block that used to sit inline in the
 ' RichEdit subclass. The visible win is a themeable menu that matches the rest of the
-' family; the structural cost is that CPopupMenu is NOT modal. TrackPopupMenu returned
+' family; the structural cost is that PsPopupMenu is NOT modal. TrackPopupMenu returned
 ' the chosen id, so cut/copy/paste ran in the same stack frame as WM_CONTEXTMENU; now
 ' Show returns immediately and the command runs later, from the select callback.
 '
 ' The callback signature carries no user data, so the target RichEdit is parked here at
-' show time. Safe because CPopupMenu enforces ONE open chain per application: a second
+' show time. Safe because PsPopupMenu enforces ONE open chain per application: a second
 ' textbox's menu closes the first, and a closed menu never fires a select.
 ' ========================================================================================
 dim shared as HWND gTB_ContextMenuTarget   ' RichEdit whose menu is currently open
 
 ' Item ids. Local to this menu (they never leave the control), 1-based because 0 is
-' CPopupMenu's separator marker.
-#define CTEXTBOX_IDM_CUT         1
-#define CTEXTBOX_IDM_COPY        2
-#define CTEXTBOX_IDM_PASTE       3
-#define CTEXTBOX_IDM_SELECTALL   4
+' PsPopupMenu's separator marker.
+#define PSTEXTBOX_IDM_CUT         1
+#define PSTEXTBOX_IDM_COPY        2
+#define PSTEXTBOX_IDM_PASTE       3
+#define PSTEXTBOX_IDM_SELECTALL   4
 
-private sub CTextBox_ContextMenuSelect( byval hPopup as HWND, byval id as long )
+private sub PsTextBox_ContextMenuSelect( byval hPopup as HWND, byval id as long )
     dim as HWND hWin = gTB_ContextMenuTarget
     if hWin = 0 then exit sub
     if IsWindow( hWin ) = 0 then exit sub
     select case id
-        case CTEXTBOX_IDM_CUT:       SendMessage( hWin, WM_CUT, 0, 0 )
-        case CTEXTBOX_IDM_COPY:      SendMessage( hWin, WM_COPY, 0, 0 )
-        case CTEXTBOX_IDM_PASTE:     SendMessage( hWin, WM_PASTE, 0, 0 )
-        case CTEXTBOX_IDM_SELECTALL: SendMessage( hWin, EM_SETSEL, 0, -1 )
+        case PSTEXTBOX_IDM_CUT:       SendMessage( hWin, WM_CUT, 0, 0 )
+        case PSTEXTBOX_IDM_COPY:      SendMessage( hWin, WM_COPY, 0, 0 )
+        case PSTEXTBOX_IDM_PASTE:     SendMessage( hWin, WM_PASTE, 0, 0 )
+        case PSTEXTBOX_IDM_SELECTALL: SendMessage( hWin, EM_SETSEL, 0, -1 )
     end select
 end sub
 
 ' Rebuild from the current selection / clipboard / read-only state and show at the
 ' cursor (which also covers the keyboard menu key well enough). An empty menu -- nothing
 ' selected, nothing to paste, no text -- shows nothing at all, as before.
-private sub CTextBox_ShowContextMenu( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_ShowContextMenu( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->hContextMenu = 0 then exit sub
 
@@ -70,70 +70,70 @@ private sub CTextBox_ShowContextMenu( byval pTextBox as CTEXTBOX ptr )
     dim as DWSTRING wszSelText = RichEdit_GetSelText( hWin )
     dim as boolean bHasSel = (len(wszSelText) > 0)
 
-    CPopupMenu_Clear( hPopup )
+    PsPopupMenu_Clear( hPopup )
 
     if bHasSel andalso (bReadOnly = false) then
-        CPopupMenu_AddItem( hPopup, CTEXTBOX_IDM_CUT, pTextBox->wszMenuCut )
+        PsPopupMenu_AddItem( hPopup, PSTEXTBOX_IDM_CUT, pTextBox->wszMenuCut )
     end if
     if bHasSel then
-        CPopupMenu_AddItem( hPopup, CTEXTBOX_IDM_COPY, pTextBox->wszMenuCopy )
+        PsPopupMenu_AddItem( hPopup, PSTEXTBOX_IDM_COPY, pTextBox->wszMenuCopy )
     end if
     if (RichEdit_CanPaste(hWin, 0) <> 0) andalso (bReadOnly = false) then
-        if CPopupMenu_GetItemCount(hPopup) > 0 then CPopupMenu_AddSeparator( hPopup )
-        CPopupMenu_AddItem( hPopup, CTEXTBOX_IDM_PASTE, pTextBox->wszMenuPaste )
+        if PsPopupMenu_GetItemCount(hPopup) > 0 then PsPopupMenu_AddSeparator( hPopup )
+        PsPopupMenu_AddItem( hPopup, PSTEXTBOX_IDM_PASTE, pTextBox->wszMenuPaste )
     end if
     ' Select All: offered whenever the control holds any text (read-only included --
     ' selecting is always allowed).
     if GetWindowTextLength(hWin) > 0 then
-        if CPopupMenu_GetItemCount(hPopup) > 0 then CPopupMenu_AddSeparator( hPopup )
-        CPopupMenu_AddItem( hPopup, CTEXTBOX_IDM_SELECTALL, pTextBox->wszMenuSelectAll )
+        if PsPopupMenu_GetItemCount(hPopup) > 0 then PsPopupMenu_AddSeparator( hPopup )
+        PsPopupMenu_AddItem( hPopup, PSTEXTBOX_IDM_SELECTALL, pTextBox->wszMenuSelectAll )
     end if
 
-    if CPopupMenu_GetItemCount(hPopup) = 0 then exit sub
+    if PsPopupMenu_GetItemCount(hPopup) = 0 then exit sub
 
     dim as POINT pt
     GetCursorPos( @pt )
     gTB_ContextMenuTarget = hWin
-    CPopupMenu_Show( hPopup, pt.x, pt.y )
+    PsPopupMenu_Show( hPopup, pt.x, pt.y )
 end sub
 
 
 ' ========================================================================================
-' The context menu's public surface. See the contract block in CTextBox.bi -- the filter
+' The context menu's public surface. See the contract block in PsTextBox.bi -- the filter
 ' is an OBLIGATION on the host's message pump, not an optional extra.
 ' ========================================================================================
-function CTextBox_GetContextMenu( byval hTextBoxControl as HWND ) as HWND
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetContextMenu( byval hTextBoxControl as HWND ) as HWND
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->hContextMenu
 end function
 
 ' Resolve the popup of whichever textbox last opened its menu (0 if none). Both the
 ' filter and the close path need it.
-private function CTextBox_OpenContextMenu() as HWND
+private function PsTextBox_OpenContextMenu() as HWND
     if gTB_ContextMenuTarget = 0 then return 0
     if IsWindow( gTB_ContextMenuTarget ) = 0 then
         gTB_ContextMenuTarget = 0
         return 0
     end if
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer( GetParent(gTB_ContextMenuTarget) )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer( GetParent(gTB_ContextMenuTarget) )
     if pTextBox = null then return 0
     return pTextBox->hContextMenu
 end function
 
-function CTextBox_FilterMessage( byval pMsg as MSG ptr ) as boolean
-    ' One call serves every CTextBox: only one chain can be open, and the last-shown
-    ' target identifies it. CPopupMenu_FilterMessage is self-guarding -- it stands down
+function PsTextBox_FilterMessage( byval pMsg as MSG ptr ) as boolean
+    ' One call serves every PsTextBox: only one chain can be open, and the last-shown
+    ' target identifies it. PsPopupMenu_FilterMessage is self-guarding -- it stands down
     ' unless the handle really is in the currently open chain -- so a stale handle here
     ' costs one comparison and nothing else.
-    dim as HWND hPopup = CTextBox_OpenContextMenu()
+    dim as HWND hPopup = PsTextBox_OpenContextMenu()
     if hPopup = 0 then return false
-    return CPopupMenu_FilterMessage( hPopup, pMsg )
+    return PsPopupMenu_FilterMessage( hPopup, pMsg )
 end function
 
-sub CTextBox_CloseContextMenu()
-    dim as HWND hPopup = CTextBox_OpenContextMenu()
-    if hPopup then CPopupMenu_CloseChain( hPopup )
+sub PsTextBox_CloseContextMenu()
+    dim as HWND hPopup = PsTextBox_OpenContextMenu()
+    if hPopup then PsPopupMenu_CloseChain( hPopup )
     gTB_ContextMenuTarget = 0
 end sub
 
@@ -144,7 +144,7 @@ end sub
 ' formatting is produced; SCF_ALL plus TM_PLAINTEXT mode keeps the entire buffer in
 ' this one format -- the control never colors individual characters.
 ' ========================================================================================
-private sub CTextBox_ApplyCharFormat( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_ApplyCharFormat( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->hRichEdit = 0 then exit sub
 
@@ -180,7 +180,7 @@ end sub
 ' ========================================================================================
 ' Apply the stored horizontal alignment to the buffer.
 '
-' The paragraph-format counterpart to CTextBox_ApplyCharFormat above, and the only place
+' The paragraph-format counterpart to PsTextBox_ApplyCharFormat above, and the only place
 ' alignment is produced. It is NOT called at Create: the RichEdit already starts left-aligned,
 ' so a control whose host never asks for anything else never runs a line of this.
 '
@@ -206,13 +206,13 @@ end sub
 ' THE COST, stated plainly: the undo history does not survive. Called at setup time -- which
 ' is when a host sets alignment, and when the buffer is empty anyway -- it costs nothing at
 ' all. Called on a control the user has been typing into, it costs them their undo stack.
-' That is why CTextBox_SetTextAlign says so in its own comment.
+' That is why PsTextBox_SetTextAlign says so in its own comment.
 '
 ' Multiline with several paragraphs relies on inheritance: the restored text is typed into
 ' the one formatted paragraph, and each new paragraph inherits the preceding one's format.
 ' The harness asserts this on a real multiline control rather than trusting it.
 ' ========================================================================================
-private sub CTextBox_ApplyParaFormat( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_ApplyParaFormat( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->hRichEdit = 0 then exit sub
 
@@ -265,7 +265,7 @@ end sub
 ' Single-line only: a multiline control never calls EM_SETRECT, so its formatting rect
 ' keeps tracking the client area automatically and text starts at the top.
 ' ========================================================================================
-private sub CTextBox_CenterSingleLineText( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_CenterSingleLineText( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->bMultiline then exit sub
     dim as HWND hRichEdit = pTextBox->hRichEdit
@@ -297,7 +297,7 @@ end sub
 ' control) so they can be re-applied after every EM_SETRECT: the formatting rect and
 ' the margins are set through different messages and geometry changes redo both.
 ' ========================================================================================
-private sub CTextBox_ApplyMargins( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_ApplyMargins( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->hRichEdit = 0 then exit sub
     SendMessage( pTextBox->hRichEdit, EM_SETMARGINS, _
@@ -311,7 +311,7 @@ end sub
 ' border width on all sides), then redo vertical centering and margins. This is the
 ' only place the child geometry is produced -- rects are derived, never set.
 ' ========================================================================================
-private sub CTextBox_PositionRichEdit( byval pTextBox as CTEXTBOX ptr )
+private sub PsTextBox_PositionRichEdit( byval pTextBox as PSTEXTBOX ptr )
     if pTextBox = null then exit sub
     if pTextBox->hRichEdit = 0 then exit sub
 
@@ -324,8 +324,8 @@ private sub CTextBox_PositionRichEdit( byval pTextBox as CTEXTBOX ptr )
     if h < 0 then h = 0
     SetWindowPos( pTextBox->hRichEdit, 0, rc.left + bw, rc.top + bw, w, h, _
                   SWP_NOZORDER or SWP_SHOWWINDOW )
-    CTextBox_CenterSingleLineText( pTextBox )
-    CTextBox_ApplyMargins( pTextBox )
+    PsTextBox_CenterSingleLineText( pTextBox )
+    PsTextBox_ApplyMargins( pTextBox )
 end sub
 
 
@@ -335,7 +335,7 @@ end sub
 ' separators; the control itself always formats WITHOUT them, since "," is not an
 ' accepted input character.
 ' ========================================================================================
-private function CTextBox_FormatNumeric( byval nValue as double, byval nDecimalPlaces as integer, byval bUseComma as boolean ) as DWSTRING
+private function PsTextBox_FormatNumeric( byval nValue as double, byval nDecimalPlaces as integer, byval bUseComma as boolean ) as DWSTRING
     dim as string fmt = "0"
     if bUseComma then fmt = "#,##" & fmt
     if nDecimalPlaces > 0 then fmt = fmt & "." & string(nDecimalPlaces, "0")
@@ -349,7 +349,7 @@ end function
 ' period at all when nDecimalPlaces = 0). Empty and "-" are valid intermediate states.
 ' Used to vet a paste before it lands.
 ' ========================================================================================
-private function CTextBox_IsValidNumericText( byval pTextBox as CTEXTBOX ptr, byref wszText as DWSTRING ) as boolean
+private function PsTextBox_IsValidNumericText( byval pTextBox as PSTEXTBOX ptr, byref wszText as DWSTRING ) as boolean
     dim as integer periodAt = 0
     for i as integer = 1 to len(wszText)
         select case asc(mid(wszText, i, 1))
@@ -375,8 +375,8 @@ end function
 ' Retrieve the RichEdit child's handle. Escape hatch for RichEdit-specific messages the
 ' flat API and the forwarded EM_ range do not cover.
 ' ========================================================================================
-function CTextBox_GetRichEditHandle( byval hTextBoxControl as HWND ) as HWND
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetRichEditHandle( byval hTextBoxControl as HWND ) as HWND
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->hRichEdit
 end function
@@ -385,8 +385,8 @@ end function
 ' ========================================================================================
 ' Is this a multiline control? (Fixed at creation.)
 ' ========================================================================================
-function CTextBox_GetMultiline( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetMultiline( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return pTextBox->bMultiline
 end function
@@ -395,8 +395,8 @@ end function
 ' ========================================================================================
 ' Does this textbox own the keyboard focus? (It does when its RichEdit child does.)
 ' ========================================================================================
-function CTextBox_HasFocus( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_HasFocus( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( GetFocus() = pTextBox->hRichEdit )
 end function
@@ -405,8 +405,8 @@ end function
 ' ========================================================================================
 ' Retrieve the control's text.
 ' ========================================================================================
-function CTextBox_GetText( byval hTextBoxControl as HWND ) as DWSTRING
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetText( byval hTextBoxControl as HWND ) as DWSTRING
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return ""
     return RichEdit_GetText( pTextBox->hRichEdit )
 end function
@@ -415,8 +415,8 @@ end function
 ' ========================================================================================
 ' Set the control's text. Programmatic: does NOT fire the ChangeCallback.
 ' ========================================================================================
-function CTextBox_SetText( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetText( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     pTextBox->bInternalChange = true
     SendMessage( pTextBox->hRichEdit, WM_SETTEXT, 0, cast(LPARAM, Text.vptr) )
@@ -428,8 +428,8 @@ end function
 ' ========================================================================================
 ' Retrieve the length of the control's text, in characters.
 ' ========================================================================================
-function CTextBox_GetTextLength( byval hTextBoxControl as HWND ) as integer
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetTextLength( byval hTextBoxControl as HWND ) as integer
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return GetWindowTextLength( pTextBox->hRichEdit )
 end function
@@ -438,8 +438,8 @@ end function
 ' ========================================================================================
 ' Retrieve the currently selected text ("" if no selection).
 ' ========================================================================================
-function CTextBox_GetSelText( byval hTextBoxControl as HWND ) as DWSTRING
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetSelText( byval hTextBoxControl as HWND ) as DWSTRING
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return ""
     return RichEdit_GetSelText( pTextBox->hRichEdit )
 end function
@@ -449,8 +449,8 @@ end function
 ' Replace the current selection (or insert at the caret when there is none).
 ' Programmatic: does NOT fire the ChangeCallback. The replace is undoable.
 ' ========================================================================================
-function CTextBox_ReplaceSel( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_ReplaceSel( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     pTextBox->bInternalChange = true
     SendMessage( pTextBox->hRichEdit, EM_REPLACESEL, true, cast(LPARAM, Text.vptr) )
@@ -462,17 +462,17 @@ end function
 ' ========================================================================================
 ' Clear all text. Programmatic: does NOT fire the ChangeCallback.
 ' ========================================================================================
-function CTextBox_Clear( byval hTextBoxControl as HWND ) as boolean
-    return CTextBox_SetText( hTextBoxControl, "" )
+function PsTextBox_Clear( byval hTextBoxControl as HWND ) as boolean
+    return PsTextBox_SetText( hTextBoxControl, "" )
 end function
 
 
 ' ========================================================================================
 ' Retrieve the selection as 0-based character indices (nStart = nEnd means a caret).
 ' ========================================================================================
-sub CTextBox_GetSel( byval hTextBoxControl as HWND, byref nStart as integer, byref nEnd as integer )
+sub PsTextBox_GetSel( byval hTextBoxControl as HWND, byref nStart as integer, byref nEnd as integer )
     nStart = 0: nEnd = 0
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     dim as DWORD dwStart, dwEnd
     SendMessage( pTextBox->hRichEdit, EM_GETSEL, cast(WPARAM, @dwStart), cast(LPARAM, @dwEnd) )
@@ -483,8 +483,8 @@ end sub
 ' ========================================================================================
 ' Set the selection. nEnd = -1 selects through the end of the text.
 ' ========================================================================================
-sub CTextBox_SetSel( byval hTextBoxControl as HWND, byval nStart as integer, byval nEnd as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetSel( byval hTextBoxControl as HWND, byval nStart as integer, byval nEnd as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, EM_SETSEL, nStart, nEnd )
 end sub
@@ -493,22 +493,22 @@ end sub
 ' ========================================================================================
 ' Select all text.
 ' ========================================================================================
-sub CTextBox_SelectAll( byval hTextBoxControl as HWND )
-    CTextBox_SetSel( hTextBoxControl, 0, -1 )
+sub PsTextBox_SelectAll( byval hTextBoxControl as HWND )
+    PsTextBox_SetSel( hTextBoxControl, 0, -1 )
 end sub
 
 
 ' ========================================================================================
 ' Text length limit (characters). 0 restores the RichEdit default limit.
 ' ========================================================================================
-function CTextBox_GetLimitText( byval hTextBoxControl as HWND ) as integer
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetLimitText( byval hTextBoxControl as HWND ) as integer
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return SendMessage( pTextBox->hRichEdit, EM_GETLIMITTEXT, 0, 0 )
 end function
 
-sub CTextBox_SetLimitText( byval hTextBoxControl as HWND, byval nLimit as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetLimitText( byval hTextBoxControl as HWND, byval nLimit as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, EM_EXLIMITTEXT, 0, nLimit )
 end sub
@@ -517,14 +517,14 @@ end sub
 ' ========================================================================================
 ' Read-only state.
 ' ========================================================================================
-function CTextBox_GetReadOnly( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetReadOnly( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( (GetWindowLongPtr( pTextBox->hRichEdit, GWL_STYLE ) and ES_READONLY) <> 0 )
 end function
 
-function CTextBox_SetReadOnly( byval hTextBoxControl as HWND, byval bReadOnly as boolean ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetReadOnly( byval hTextBoxControl as HWND, byval bReadOnly as boolean ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( SendMessage( pTextBox->hRichEdit, EM_SETREADONLY, bReadOnly, 0 ) <> 0 )
 end function
@@ -533,14 +533,14 @@ end function
 ' ========================================================================================
 ' Modified flag (set by user edits, cleared by WM_SETTEXT or SetModify(false)).
 ' ========================================================================================
-function CTextBox_GetModify( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetModify( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( SendMessage( pTextBox->hRichEdit, EM_GETMODIFY, 0, 0 ) <> 0 )
 end function
 
-sub CTextBox_SetModify( byval hTextBoxControl as HWND, byval bModified as boolean )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetModify( byval hTextBoxControl as HWND, byval bModified as boolean )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, EM_SETMODIFY, bModified, 0 )
 end sub
@@ -549,8 +549,8 @@ end sub
 ' ========================================================================================
 ' Password character (0 turns password mode off).
 ' ========================================================================================
-sub CTextBox_SetPasswordChar( byval hTextBoxControl as HWND, byval wchChar as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetPasswordChar( byval hTextBoxControl as HWND, byval wchChar as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, EM_SETPASSWORDCHAR, wchChar, 0 )
     InvalidateRect( pTextBox->hRichEdit, null, true )
@@ -560,14 +560,14 @@ end sub
 ' ========================================================================================
 ' Select-all-on-focus behavior.
 ' ========================================================================================
-function CTextBox_GetSelectOnFocus( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetSelectOnFocus( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return pTextBox->bSelectOnFocus
 end function
 
-sub CTextBox_SetSelectOnFocus( byval hTextBoxControl as HWND, byval bSelect as boolean )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetSelectOnFocus( byval hTextBoxControl as HWND, byval bSelect as boolean )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->bSelectOnFocus = bSelect
 end sub
@@ -576,63 +576,63 @@ end sub
 ' ========================================================================================
 ' Numeric input mode.
 ' ========================================================================================
-function CTextBox_GetNumericMode( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetNumericMode( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return pTextBox->bNumericOnly
 end function
 
-sub CTextBox_SetNumericMode( byval hTextBoxControl as HWND, byval bEnable as boolean )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetNumericMode( byval hTextBoxControl as HWND, byval bEnable as boolean )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     if pTextBox->bMultiline then exit sub    ' numeric mode is single-line only
     pTextBox->bNumericOnly = bEnable
 end sub
 
-function CTextBox_GetDecimalPlaces( byval hTextBoxControl as HWND ) as integer
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetDecimalPlaces( byval hTextBoxControl as HWND ) as integer
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->nDecimalPlaces
 end function
 
-sub CTextBox_SetDecimalPlaces( byval hTextBoxControl as HWND, byval nPlaces as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetDecimalPlaces( byval hTextBoxControl as HWND, byval nPlaces as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     if nPlaces < 0 then nPlaces = 0
     pTextBox->nDecimalPlaces = nPlaces
 end sub
 
 ' The current text as a double (val of the text; empty/"-"/"." read as 0).
-function CTextBox_GetValue( byval hTextBoxControl as HWND ) as double
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetValue( byval hTextBoxControl as HWND ) as double
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return val( RichEdit_GetText( pTextBox->hRichEdit ) )
 end function
 
 ' Set the text from a double, formatted to DecimalPlaces. Programmatic: silent.
-function CTextBox_SetValue( byval hTextBoxControl as HWND, byval nValue as double ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetValue( byval hTextBoxControl as HWND, byval nValue as double ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
-    return CTextBox_SetText( hTextBoxControl, _
-                CTextBox_FormatNumeric( nValue, pTextBox->nDecimalPlaces, false ) )
+    return PsTextBox_SetText( hTextBoxControl, _
+                PsTextBox_FormatNumeric( nValue, pTextBox->nDecimalPlaces, false ) )
 end function
 
 ' Display the formatted zero instead of an empty box (numeric mode only).
-function CTextBox_GetZeroWhenEmpty( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetZeroWhenEmpty( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return pTextBox->bZeroWhenEmpty
 end function
 
-sub CTextBox_SetZeroWhenEmpty( byval hTextBoxControl as HWND, byval bEnable as boolean )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetZeroWhenEmpty( byval hTextBoxControl as HWND, byval bEnable as boolean )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->bZeroWhenEmpty = bEnable
     ' Apply immediately when the box is already empty and not being edited; a focused
     ' box is left alone (the user may be mid-entry) -- its focus loss will stamp it.
     if bEnable andalso pTextBox->bNumericOnly then
         if (GetWindowTextLength(pTextBox->hRichEdit) = 0) andalso (GetFocus() <> pTextBox->hRichEdit) then
-            CTextBox_SetValue( hTextBoxControl, 0 )
+            PsTextBox_SetValue( hTextBoxControl, 0 )
         end if
     end if
 end sub
@@ -641,38 +641,38 @@ end sub
 ' ========================================================================================
 ' Clipboard and undo.
 ' ========================================================================================
-sub CTextBox_Cut( byval hTextBoxControl as HWND )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_Cut( byval hTextBoxControl as HWND )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, WM_CUT, 0, 0 )
 end sub
 
-sub CTextBox_Copy( byval hTextBoxControl as HWND )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_Copy( byval hTextBoxControl as HWND )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, WM_COPY, 0, 0 )
 end sub
 
-sub CTextBox_Paste( byval hTextBoxControl as HWND )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_Paste( byval hTextBoxControl as HWND )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     SendMessage( pTextBox->hRichEdit, WM_PASTE, 0, 0 )
 end sub
 
-function CTextBox_CanPaste( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_CanPaste( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( RichEdit_CanPaste( pTextBox->hRichEdit, 0 ) <> 0 )
 end function
 
-function CTextBox_Undo( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_Undo( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( SendMessage( pTextBox->hRichEdit, EM_UNDO, 0, 0 ) <> 0 )
 end function
 
-function CTextBox_CanUndo( byval hTextBoxControl as HWND ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_CanUndo( byval hTextBoxControl as HWND ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     return ( SendMessage( pTextBox->hRichEdit, EM_CANUNDO, 0, 0 ) <> 0 )
 end function
@@ -681,34 +681,34 @@ end function
 ' ========================================================================================
 ' Left/right text margins, in pixels.
 ' ========================================================================================
-sub CTextBox_GetMargins( byval hTextBoxControl as HWND, byref nLeft as integer, byref nRight as integer )
+sub PsTextBox_GetMargins( byval hTextBoxControl as HWND, byref nLeft as integer, byref nRight as integer )
     nLeft = 0: nRight = 0
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     nLeft = pTextBox->nMarginLeft
     nRight = pTextBox->nMarginRight
 end sub
 
-sub CTextBox_SetMargins( byval hTextBoxControl as HWND, byval nLeft as integer, byval nRight as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetMargins( byval hTextBoxControl as HWND, byval nLeft as integer, byval nRight as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->nMarginLeft = nLeft
     pTextBox->nMarginRight = nRight
-    CTextBox_ApplyMargins( pTextBox )
+    PsTextBox_ApplyMargins( pTextBox )
     InvalidateRect( pTextBox->hRichEdit, null, true )
 end sub
 
 
 ' ========================================================================================
-' Vertical scroll state, in LINES -- shaped 1:1 for CVScrollBar_SetRange(total, page, pos).
+' Vertical scroll state, in LINES -- shaped 1:1 for PsVScrollBar_SetRange(total, page, pos).
 ' LinesPerPage derives from the formatting-rect height and the text font's line height
 ' (TEXTMETRIC height + external leading, which is how the RichEdit spaces single-format
 ' plain-text lines); a partial line at the bottom is not counted. No fudge factors --
 ' the harness asserts these numbers against hand counts.
 ' ========================================================================================
-sub CTextBox_GetVScrollInfo( byval hTextBoxControl as HWND, byref nTotalLines as integer, byref nLinesPerPage as integer, byref nFirstVisibleLine as integer )
+sub PsTextBox_GetVScrollInfo( byval hTextBoxControl as HWND, byref nTotalLines as integer, byref nLinesPerPage as integer, byref nFirstVisibleLine as integer )
     nTotalLines = 0: nLinesPerPage = 0: nFirstVisibleLine = 0
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     dim as HWND hRichEdit = pTextBox->hRichEdit
     if hRichEdit = 0 then exit sub
@@ -739,12 +739,12 @@ end sub
 
 ' ========================================================================================
 ' Scroll so nLine (0-based) becomes the first visible line -- the receiving end of a
-' scrollbar's position callback (CVScrollBar's ScrollCallback newPos goes straight here).
+' scrollbar's position callback (PsVScrollBar's ScrollCallback newPos goes straight here).
 ' EM_LINESCROLL takes a DELTA, so the current first line is subtracted; the RichEdit
 ' clamps overscroll itself.
 ' ========================================================================================
-sub CTextBox_ScrollToLine( byval hTextBoxControl as HWND, byval nLine as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_ScrollToLine( byval hTextBoxControl as HWND, byval nLine as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     if pTextBox->hRichEdit = 0 then exit sub
     if nLine < 0 then nLine = 0
@@ -758,19 +758,19 @@ end sub
 ' ========================================================================================
 ' Text font (caller-owned HFONT; 0 = stock DEFAULT_GUI_FONT).
 ' ========================================================================================
-function CTextBox_GetFont( byval hTextBoxControl as HWND ) as HFONT
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetFont( byval hTextBoxControl as HWND ) as HFONT
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->hTextFont
 end function
 
-function CTextBox_SetFont( byval hTextBoxControl as HWND, byval hFont as HFONT ) as boolean
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetFont( byval hTextBoxControl as HWND, byval hFont as HFONT ) as boolean
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return false
     pTextBox->hTextFont = hFont
-    CTextBox_ApplyCharFormat( pTextBox )
-    CTextBox_CenterSingleLineText( pTextBox )
-    CTextBox_ApplyMargins( pTextBox )
+    PsTextBox_ApplyCharFormat( pTextBox )
+    PsTextBox_CenterSingleLineText( pTextBox )
+    PsTextBox_ApplyMargins( pTextBox )
     InvalidateRect( pTextBox->hRichEdit, null, true )
     return true
 end function
@@ -779,18 +779,18 @@ end function
 ' ========================================================================================
 ' Text forecolor (one color for ALL text).
 ' ========================================================================================
-function CTextBox_GetForeColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetForeColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->ForeColor
 end function
 
-function CTextBox_SetForeColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetForeColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     dim as COLORREF oldclr = pTextBox->ForeColor
     pTextBox->ForeColor = clr
-    CTextBox_ApplyCharFormat( pTextBox )
+    PsTextBox_ApplyCharFormat( pTextBox )
     return oldclr
 end function
 
@@ -798,14 +798,14 @@ end function
 ' ========================================================================================
 ' Background color (the text area; the border/outer chrome has its own colors).
 ' ========================================================================================
-function CTextBox_GetBackColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetBackColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->BackColor
 end function
 
-function CTextBox_SetBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_SetBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     dim as COLORREF oldclr = pTextBox->BackColor
     pTextBox->BackColor = clr
@@ -818,40 +818,40 @@ end function
 ' ========================================================================================
 ' Cue banner: text, color, font.
 ' ========================================================================================
-function CTextBox_GetCueBannerText( byval hTextBoxControl as HWND ) as DWSTRING
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetCueBannerText( byval hTextBoxControl as HWND ) as DWSTRING
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return ""
     return pTextBox->CueText
 end function
 
-sub CTextBox_SetCueBannerText( byval hTextBoxControl as HWND, byval Text as DWSTRING )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetCueBannerText( byval hTextBoxControl as HWND, byval Text as DWSTRING )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->CueText = Text
     InvalidateRect( pTextBox->hRichEdit, null, true )
 end sub
 
-function CTextBox_GetCueBannerColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetCueBannerColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->CueColor
 end function
 
-sub CTextBox_SetCueBannerColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetCueBannerColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->CueColor = clr
     InvalidateRect( pTextBox->hRichEdit, null, true )
 end sub
 
-function CTextBox_GetCueBannerFont( byval hTextBoxControl as HWND ) as HFONT
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetCueBannerFont( byval hTextBoxControl as HWND ) as HFONT
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->hCueFont
 end function
 
-sub CTextBox_SetCueBannerFont( byval hTextBoxControl as HWND, byval hFont as HFONT )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetCueBannerFont( byval hTextBoxControl as HWND, byval hFont as HFONT )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->hCueFont = hFont
     InvalidateRect( pTextBox->hRichEdit, null, true )
@@ -861,44 +861,44 @@ end sub
 ' ========================================================================================
 ' Border chrome: colors, width, corner radius, outer fill.
 ' ========================================================================================
-function CTextBox_GetBorderColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetBorderColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->BorderColor
 end function
 
-sub CTextBox_SetBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->BorderColor = clr
     InvalidateRect( pTextBox->hWin, null, true )
 end sub
 
-function CTextBox_GetFocusBorderColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetFocusBorderColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->FocusBorderColor
 end function
 
-sub CTextBox_SetFocusBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetFocusBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->FocusBorderColor = clr
     InvalidateRect( pTextBox->hWin, null, true )
 end sub
 
-function CTextBox_GetBorderWidth( byval hTextBoxControl as HWND ) as integer
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetBorderWidth( byval hTextBoxControl as HWND ) as integer
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->nBorderWidth
 end function
 
-sub CTextBox_SetBorderWidth( byval hTextBoxControl as HWND, byval nWidth as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetBorderWidth( byval hTextBoxControl as HWND, byval nWidth as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     if nWidth < 0 then nWidth = 0
     pTextBox->nBorderWidth = nWidth
-    CTextBox_PositionRichEdit( pTextBox )    ' the child inset derives from the width
+    PsTextBox_PositionRichEdit( pTextBox )    ' the child inset derives from the width
     InvalidateRect( pTextBox->hWin, null, true )
 end sub
 
@@ -907,21 +907,21 @@ end sub
 ' existed are unaffected -- PFA_LEFT is what the RichEdit was already doing.
 '
 ' SET IT BEFORE THE CONTROL HAS CONTENT. Applying it rewrites the buffer (see
-' CTextBox_ApplyParaFormat for why there is no other way), which discards the undo history.
+' PsTextBox_ApplyParaFormat for why there is no other way), which discards the undo history.
 ' On an empty control -- the normal case, since alignment is a setup-time decision -- there
 ' is nothing to discard and nothing to notice.
 '
 ' An unrecognized value falls back to LEFT rather than being rejected: the alternative is a
 ' control whose alignment silently disagrees with what the host thinks it set.
 ' ========================================================================================
-function CTextBox_GetTextAlign( byval hTextBoxControl as HWND ) as long
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetTextAlign( byval hTextBoxControl as HWND ) as long
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return TXT_ALIGN_LEFT
     return pTextBox->nTextAlign
 end function
 
-sub CTextBox_SetTextAlign( byval hTextBoxControl as HWND, byval nAlign as long )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetTextAlign( byval hTextBoxControl as HWND, byval nAlign as long )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     select case nAlign
     case TXT_ALIGN_LEFT, TXT_ALIGN_CENTER, TXT_ALIGN_RIGHT
@@ -929,32 +929,32 @@ sub CTextBox_SetTextAlign( byval hTextBoxControl as HWND, byval nAlign as long )
         nAlign = TXT_ALIGN_LEFT
     end select
     pTextBox->nTextAlign = nAlign
-    CTextBox_ApplyParaFormat( pTextBox )
+    PsTextBox_ApplyParaFormat( pTextBox )
 end sub
 
 
-function CTextBox_GetCornerRadius( byval hTextBoxControl as HWND ) as integer
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetCornerRadius( byval hTextBoxControl as HWND ) as integer
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->nCornerRadius
 end function
 
-sub CTextBox_SetCornerRadius( byval hTextBoxControl as HWND, byval nRadius as integer )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetCornerRadius( byval hTextBoxControl as HWND, byval nRadius as integer )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     if nRadius < 0 then nRadius = 0
     pTextBox->nCornerRadius = nRadius
     InvalidateRect( pTextBox->hWin, null, true )
 end sub
 
-function CTextBox_GetOuterBackColor( byval hTextBoxControl as HWND ) as COLORREF
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+function PsTextBox_GetOuterBackColor( byval hTextBoxControl as HWND ) as COLORREF
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then return 0
     return pTextBox->OuterBackColor
 end function
 
-sub CTextBox_SetOuterBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetOuterBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->OuterBackColor = clr
     InvalidateRect( pTextBox->hWin, null, true )
@@ -965,8 +965,8 @@ end sub
 ' Localize the built-in context menu. An empty SelectAllText keeps the current Select All
 ' label, so pre-existing 3-argument callers keep their default.
 ' ========================================================================================
-sub CTextBox_SetMenuText( byval hTextBoxControl as HWND, byval CutText as DWSTRING, byval CopyText as DWSTRING, byval PasteText as DWSTRING, byval SelectAllText as DWSTRING = "" )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetMenuText( byval hTextBoxControl as HWND, byval CutText as DWSTRING, byval CopyText as DWSTRING, byval PasteText as DWSTRING, byval SelectAllText as DWSTRING = "" )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->wszMenuCut = CutText
     pTextBox->wszMenuCopy = CopyText
@@ -978,32 +978,32 @@ end sub
 ' ========================================================================================
 ' Callback setters.
 ' ========================================================================================
-sub CTextBox_SetChangeCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ChangeCallbackSub )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetChangeCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ChangeCallbackSub )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->ChangeCallback = usersub
 end sub
 
-sub CTextBox_SetFocusCallback( byval hTextBoxControl as HWND, byval usersub as TXT_FocusCallbackSub )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetFocusCallback( byval hTextBoxControl as HWND, byval usersub as TXT_FocusCallbackSub )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->FocusCallback = usersub
 end sub
 
-sub CTextBox_SetEnterPressedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_EnterPressedCallbackSub )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetEnterPressedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_EnterPressedCallbackSub )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->EnterPressedCallback = usersub
 end sub
 
-sub CTextBox_SetMessageCallback( byval hTextBoxControl as HWND, byval userfunc as TXT_MessageCallbackFunc )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetMessageCallback( byval hTextBoxControl as HWND, byval userfunc as TXT_MessageCallbackFunc )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->MessageCallback = userfunc
 end sub
 
-sub CTextBox_SetScrollChangedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ScrollChangedCallbackSub )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
+sub PsTextBox_SetScrollChangedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ScrollChangedCallbackSub )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hTextBoxControl)
     if pTextBox = null then exit sub
     pTextBox->ScrollChangedCallback = usersub
 end sub
@@ -1017,7 +1017,7 @@ end sub
 ' capture internally, so there is no press state of ours a suppressed message could
 ' strand -- which is why the MessageCallback result is honored uniformly.
 ' ========================================================================================
-function CTextBoxRichEdit_SubclassProc ( _
+function PsTextBoxRichEdit_SubclassProc ( _
             byval hWin   as HWND, _                 ' // Control window handle
             byval uMsg   as UINT, _                 ' // Type of message
             byval _wParam as WPARAM, _              ' // First message parameter
@@ -1027,7 +1027,7 @@ function CTextBoxRichEdit_SubclassProc ( _
             ) as LRESULT
 
     dim as HWND hCtrl = GetParent( hWin )
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer( hCtrl )
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer( hCtrl )
 
     ' Host observation with veto, before the control acts on the message.
     if (pTextBox <> null) andalso (pTextBox->MessageCallback <> null) then
@@ -1036,7 +1036,7 @@ function CTextBoxRichEdit_SubclassProc ( _
                  WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK, _
                  WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, _
                  WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_CONTEXTMENU, WM_SETFOCUS, WM_KILLFOCUS
-                dim m as CTEXTBOX_MESSAGEINFO
+                dim m as PSTEXTBOX_MESSAGEINFO
                 m.hTextBox = hCtrl
                 m.uMsg = uMsg
                 m.wParam = _wParam
@@ -1162,7 +1162,7 @@ function CTextBoxRichEdit_SubclassProc ( _
                 SendMessage( hWin, EM_GETSEL, cast(WPARAM, @dwStart), cast(LPARAM, @dwEnd) )
                 dim as DWSTRING wszText = RichEdit_GetText( hWin )
                 dim as DWSTRING wszProspective = left(wszText, dwStart) & wszClip & mid(wszText, dwEnd + 1)
-                if CTextBox_IsValidNumericText( pTextBox, wszProspective ) = false then return 0
+                if PsTextBox_IsValidNumericText( pTextBox, wszProspective ) = false then return 0
             end if
 
         case WM_KEYDOWN
@@ -1180,7 +1180,7 @@ function CTextBoxRichEdit_SubclassProc ( _
             if (_wParam = VK_TAB) andalso (bSingleLine = true) then
                 ' Tab leaves the control: focus the next (Shift+Tab: previous) tab stop
                 ' of the top-level window. Handled here so tabbing works even in hosts
-                ' whose message loop has no IsDialogMessage (see CTextBox.bi). Reached
+                ' whose message loop has no IsDialogMessage (see PsTextBox.bi). Reached
                 ' only when the MessageCallback declined the key -- a host can veto
                 ' VK_TAB to repurpose it (e.g. list navigation in a picker).
                 dim as HWND hRoot = GetAncestor( hWin, GA_ROOT )
@@ -1236,7 +1236,7 @@ function CTextBoxRichEdit_SubclassProc ( _
                     dim as DWSTRING wszText = RichEdit_GetText( hWin )
                     if (len(wszText) > 0) orelse (pTextBox->bZeroWhenEmpty = true) then
                         dim as DWSTRING wszFormatted = _
-                            CTextBox_FormatNumeric( val(wszText), pTextBox->nDecimalPlaces, false )
+                            PsTextBox_FormatNumeric( val(wszText), pTextBox->nDecimalPlaces, false )
                         if wszFormatted <> wszText then
                             pTextBox->bInternalChange = true
                             SendMessage( hWin, WM_SETTEXT, 0, cast(LPARAM, wszFormatted.vptr) )
@@ -1266,18 +1266,18 @@ function CTextBoxRichEdit_SubclassProc ( _
         ' NOTE: there is deliberately no WM_SETTEXT case re-applying the paragraph format.
         ' One was written, on the assumption that replacing the buffer discards the format
         ' with the paragraph it belonged to. The harness proved otherwise -- a format applied
-        ' the way CTextBox_ApplyParaFormat applies it survives every subsequent SetText -- so
+        ' the way PsTextBox_ApplyParaFormat applies it survives every subsequent SetText -- so
         ' the handler was deleted rather than kept "just in case". It would also have
         ' recursed, since ApplyParaFormat writes text itself.
 
         case WM_CONTEXTMENU
             if pTextBox = null then exit select
-            CTextBox_ShowContextMenu( pTextBox )
+            PsTextBox_ShowContextMenu( pTextBox )
             return 0
 
         case WM_DESTROY
             ' REQUIRED: Remove control subclassing
-            RemoveWindowSubclass( hWin, @CTextBoxRichEdit_SubclassProc, uIdSubclass )
+            RemoveWindowSubclass( hWin, @PsTextBoxRichEdit_SubclassProc, uIdSubclass )
 
     end select
 
@@ -1288,28 +1288,28 @@ end function
 
 
 ' ========================================================================================
-' CTextBox container window procedure. Owns the chrome and the child geometry, relays
+' PsTextBox container window procedure. Owns the chrome and the child geometry, relays
 ' EN_CHANGE, and forwards the classic edit-control message range to the RichEdit child
-' (the message door -- see CTextBox.bi).
+' (the message door -- see PsTextBox.bi).
 ' ========================================================================================
-function CTextBox_WndProc( _
+function PsTextBox_WndProc( _
             byval hwnd   as HWND, _
             byval uMsg   as UINT, _
             byval wParam as WPARAM, _
             byval lParam as LPARAM _
             ) as LRESULT
 
-    dim as CTEXTBOX ptr pTextBox = GetTextBoxPointer(hwnd)
+    dim as PSTEXTBOX ptr pTextBox = GetTextBoxPointer(hwnd)
 
     select case uMsg
 
         case WM_SIZE
-            if pTextBox then CTextBox_PositionRichEdit( pTextBox )
+            if pTextBox then PsTextBox_PositionRichEdit( pTextBox )
             return 0
 
         case WM_PAINT
             if pTextBox = null then exit select    ' DefWindowProc validates
-            dim b as CBufferPaint
+            dim b as PsBufferPaint
             b.BeginDoubleBuffer(hwnd)
             ' Outer fill first: with rounded corners the pixels outside the arcs show
             ' this color (pass the host's background color to blend in).
@@ -1387,16 +1387,16 @@ function CTextBox_WndProc( _
             if pTextBox then
                 if (wParam and EC_LEFTMARGIN) then pTextBox->nMarginLeft = loword(lParam)
                 if (wParam and EC_RIGHTMARGIN) then pTextBox->nMarginRight = hiword(lParam)
-                CTextBox_ApplyMargins( pTextBox )
+                PsTextBox_ApplyMargins( pTextBox )
                 InvalidateRect( pTextBox->hRichEdit, null, true )
                 return 0
             end if
 
         case WM_SETFONT
-            ' The door version of CTextBox_SetFont (lParam redraw flag is implicit:
+            ' The door version of PsTextBox_SetFont (lParam redraw flag is implicit:
             ' the child is always invalidated).
             if pTextBox then
-                CTextBox_SetFont( hwnd, cast(HFONT, wParam) )
+                PsTextBox_SetFont( hwnd, cast(HFONT, wParam) )
                 return 0
             end if
 
@@ -1437,26 +1437,26 @@ end function
 
 
 ' ========================================================================================
-' Creates the CTextBox custom control. The returned HWND is the control: position it
+' Creates the PsTextBox custom control. The returned HWND is the control: position it
 ' with SetWindowPos, find it with GetDlgItem(CtrlID).
 ' ========================================================================================
-function CTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byval bMultiline as boolean = false ) as HWND
+function PsTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byval bMultiline as boolean = false ) as HWND
 
     dim pWindow as CWindow ptr = new CWindow
 
     ' WS_EX_CONTROLPARENT: tab navigation (IsDialogMessage / GetNextDlgTabItem) must
     ' see through this container to the WS_TABSTOP RichEdit child inside it.
     dim as HWND hForm = _
-            pWindow->Create( hWndParent, "", @CTextBox_WndProc, _
+            pWindow->Create( hWndParent, "", @PsTextBox_WndProc, _
             0, 0, 0, 0, WS_CHILD or WS_CLIPSIBLINGS or WS_CLIPCHILDREN, _
             WS_EX_CONTROLPARENT _
             )
     ' CtrlID becomes the control window's id (GWLP_ID) so hosts can locate the
-    ' control with GetDlgItem, same contract as CListBox/CVScrollBar/CStatusBar/CTabBar.
+    ' control with GetDlgItem, same contract as PsListBox/PsVScrollBar/PsStatusBar/PsTabBar.
     SetWindowLongPtr( hForm, GWLP_ID, CtrlID )
 
     ' Define the TYPE that holds all the information about this custom textbox.
-    dim as CTEXTBOX ptr pTextBox = new CTEXTBOX
+    dim as PSTEXTBOX ptr pTextBox = new PSTEXTBOX
     pTextBox->hWin = hForm
     pTextBox->idc_TextBox = CtrlID
     pTextBox->bMultiline = bMultiline
@@ -1466,11 +1466,11 @@ function CTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byv
     pTextBox->wszMenuSelectAll = "Select All"
 
     ' The right-click menu, created up front rather than on first use so a host can style
-    ' it (CTextBox_GetContextMenu) at any time after Create. Its owner is the top-level
-    ' window: CPopupMenu uses that for z-order and for its foreground watch, so passing
+    ' it (PsTextBox_GetContextMenu) at any time after Create. Its owner is the top-level
+    ' window: PsPopupMenu uses that for z-order and for its foreground watch, so passing
     ' this child container instead would break dismissal on alt-tab.
-    pTextBox->hContextMenu = CPopupMenu_Create( GetAncestor( hForm, GA_ROOT ) )
-    CPopupMenu_SetSelectCallback( pTextBox->hContextMenu, @CTextBox_ContextMenuSelect )
+    pTextBox->hContextMenu = PsPopupMenu_Create( GetAncestor( hForm, GA_ROOT ) )
+    PsPopupMenu_SetSelectCallback( pTextBox->hContextMenu, @PsTextBox_ContextMenuSelect )
 
     ' Store the new pointer into the user data area of the container window
     pWindow->UserData(0) = cast(LONG_PTR, pTextBox)
@@ -1494,7 +1494,7 @@ function CTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byv
         pWindow->AddControl( "RICHEDIT", , CtrlID, "", 0, 0, 0, 0, _
         nEditStyle, _
         WS_EX_LEFT or WS_EX_LTRREADING )
-    pWindow->SetControlSubclass( pTextBox->hRichEdit, @CTextBoxRichEdit_SubclassProc, CtrlID, NULL )
+    pWindow->SetControlSubclass( pTextBox->hRichEdit, @PsTextBoxRichEdit_SubclassProc, CtrlID, NULL )
 
     ' Plain-text mode: one character format for the whole buffer (this control never
     ' colors individual characters) and pasted text sheds any rich formatting. Must be
@@ -1506,11 +1506,11 @@ function CTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byv
     if bMultiline then nEventMask or= ENM_UPDATE
     SendMessage( pTextBox->hRichEdit, EM_SETEVENTMASK, 0, nEventMask )
     SendMessage( pTextBox->hRichEdit, EM_SETBKGNDCOLOR, 0, cast(LPARAM, pTextBox->BackColor) )
-    ' NOTE: no CTextBox_ApplyParaFormat here on purpose. The RichEdit already starts
+    ' NOTE: no PsTextBox_ApplyParaFormat here on purpose. The RichEdit already starts
     ' left-aligned, which is this control's default, so a host that never calls
-    ' CTextBox_SetTextAlign never executes any of that machinery -- and adding the setter
+    ' PsTextBox_SetTextAlign never executes any of that machinery -- and adding the setter
     ' therefore changed nothing whatsoever for the hosts that predate it.
-    CTextBox_ApplyCharFormat( pTextBox )
+    PsTextBox_ApplyCharFormat( pTextBox )
 
     return hForm
 end function

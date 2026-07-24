@@ -2,20 +2,20 @@
 #pragma once
 
 #include once "vbcompat.bi"                 ' format() -- numeric mode formatting
-#include once "CBufferPaint.bi"
-' The built-in context menu is a CPopupMenu (canonical home C:\dev\CMenuBar; vendored
+#include once "PsBufferPaint.bi"
+' The built-in context menu is a PsPopupMenu (canonical home C:\dev\PsMenuBar; vendored
 ' here). This is the control family's owner-drawn floating menu -- using it instead of
 ' TrackPopupMenu is what makes the textbox's right-click menu themeable and consistent
 ' with the rest of an app's menus. It brings a MESSAGE-PUMP OBLIGATION with it: see
-' CTextBox_FilterMessage below.
-#include once "CPopupMenu.bi"
+' PsTextBox_FilterMessage below.
+#include once "PsPopupMenu.bi"
 ' AfxNova's RichEdit wrapper: pulls in win/richedit.bi (CHARFORMATW, EM_CANPASTE, ...)
 ' and supplies the RichEdit_* helpers used by the implementation (GetText, GetSelText,
 ' CanPaste, ...). Prefer these over re-rolled SendMessage wrappers.
 #include once "AfxNova\AfxRichEdit.inc"
 #include once "AfxNova\AfxWin.inc"          ' AfxGetClipboardText -- numeric paste validation
 
-type CTEXTBOX_MESSAGEINFO
+type PSTEXTBOX_MESSAGEINFO
     hTextBox        as HWND       ' the CONTROL (container) handle, not the RichEdit child
     uMsg            as UINT
     wParam          as WPARAM
@@ -42,9 +42,9 @@ type TXT_EnterPressedCallbackSub as sub( byval hTextBox as HWND )
 ' EN_UPDATE, which fires on any display update: typing, programmatic SetText, scrolling
 ' by wheel/keys/caret). Multiline only; deliberately NOT gated like the ChangeCallback --
 ' a programmatic SetText changes the line count and a scrollbar must hear about it.
-' Shaped for CVScrollBar: on each fire call CTextBox_GetVScrollInfo and push the three
-' numbers into CVScrollBar_SetRange( total, page, pos ); wire CVScrollBar's
-' ScrollCallback( newPos ) to CTextBox_ScrollToLine.
+' Shaped for PsVScrollBar: on each fire call PsTextBox_GetVScrollInfo and push the three
+' numbers into PsVScrollBar_SetRange( total, page, pos ); wire PsVScrollBar's
+' ScrollCallback( newPos ) to PsTextBox_ScrollToLine.
 type TXT_ScrollChangedCallbackSub as sub( byval hTextBox as HWND )
 
 ' Observe key, mouse, focus and context-menu messages before the control acts on them.
@@ -55,7 +55,7 @@ type TXT_ScrollChangedCallbackSub as sub( byval hTextBox as HWND )
 ' also suppresses the RichEdit's own caret handling -- only do that on purpose.
 ' Vetoing WM_KEYDOWN for VK_TAB repurposes Tab (the control otherwise consumes it to
 ' move focus to the next/previous tab stop -- e.g. veto it to drive a picker list).
-type TXT_MessageCallbackFunc as function( byval m as CTEXTBOX_MESSAGEINFO ptr ) as boolean
+type TXT_MessageCallbackFunc as function( byval m as PSTEXTBOX_MESSAGEINFO ptr ) as boolean
 
 
 ' Horizontal text alignment. LEFT is the default and is what every host had before this
@@ -72,7 +72,7 @@ enum
 end enum
 
 
-type CTEXTBOX
+type PSTEXTBOX
     hWin            as HWND
     hRichEdit       as HWND               ' the RichEdit50W child that does the editing
     idc_TextBox     as integer = 1000
@@ -94,9 +94,9 @@ type CTEXTBOX
     nMarginLeft     as integer = 0        ' EM_SETMARGINS values, stored so they can be
     nMarginRight    as integer = 0        '   re-applied after font/geometry changes
     ' Horizontal alignment (TXT_ALIGN_*). LEFT is the RichEdit's own starting state, so a
-    ' control whose host never calls CTextBox_SetTextAlign never touches any of the
+    ' control whose host never calls PsTextBox_SetTextAlign never touches any of the
     ' machinery behind this field. Applying a non-default value is surprisingly expensive --
-    ' see CTextBox_ApplyParaFormat, which had to be built around TM_PLAINTEXT refusing
+    ' see PsTextBox_ApplyParaFormat, which had to be built around TM_PLAINTEXT refusing
     ' EM_SETPARAFORMAT outright.
     nTextAlign      as long = TXT_ALIGN_LEFT
     ' Caller-supplied fonts (caller owns them; the control never deletes an HFONT).
@@ -106,13 +106,13 @@ type CTEXTBOX
     hCueFont        as HFONT              ' 0 = use hTextFont
     CueText         as DWSTRING           ' drawn whenever the buffer is empty ("" = none)
     ' Built-in context menu labels; defaulted to Cut/Copy/Paste/Select All at Create,
-    ' replace via CTextBox_SetMenuText to localize.
+    ' replace via PsTextBox_SetMenuText to localize.
     wszMenuCut       as DWSTRING
     wszMenuCopy      as DWSTRING
     wszMenuPaste     as DWSTRING
     wszMenuSelectAll as DWSTRING
-    ' The context menu itself: one CPopupMenu window per textbox, created at Create so a
-    ' host can theme it immediately (CTextBox_GetContextMenu), rebuilt from the current
+    ' The context menu itself: one PsPopupMenu window per textbox, created at Create so a
+    ' host can theme it immediately (PsTextBox_GetContextMenu), rebuilt from the current
     ' selection/clipboard/read-only state each time it opens, and destroyed with the
     ' control. Unlike the HMENU it replaces it is NOT modal -- the commands run from its
     ' select callback after it closes, not inline in WM_CONTEXTMENU.
@@ -150,7 +150,7 @@ end type
 ' Creation.
 ' The returned handle is the control's real HWND: position it with SetWindowPos (include
 ' SWP_SHOWWINDOW -- the control is created hidden), find it with GetDlgItem(CtrlID). The
-' RichEdit child is an implementation detail; reach it with CTextBox_GetRichEditHandle
+' RichEdit child is an implementation detail; reach it with PsTextBox_GetRichEditHandle
 ' only for RichEdit-specific messages the flat API (or the forwarded EM_ range, see
 ' below) does not cover.
 '
@@ -169,99 +169,99 @@ end type
 ' bMultiline is fixed for the control's lifetime (see the TYPE field comment). Multiline
 ' controls word-wrap (no ES_AUTOHSCROLL) and scroll vertically without showing a native
 ' scrollbar; drive an external one through the scroll API below.
-declare function CTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byval bMultiline as boolean = false ) as HWND
-declare function CTextBox_GetRichEditHandle( byval hTextBoxControl as HWND ) as HWND
-declare function CTextBox_GetMultiline( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_Create( byval hWndParent as HWND, byval CtrlID as integer, byval bMultiline as boolean = false ) as HWND
+declare function PsTextBox_GetRichEditHandle( byval hTextBoxControl as HWND ) as HWND
+declare function PsTextBox_GetMultiline( byval hTextBoxControl as HWND ) as boolean
 ' Does this textbox own the keyboard focus? Focus sits on the RichEdit child, so a
 ' plain GetFocus() = hTextBox comparison is ALWAYS false -- use this instead.
-declare function CTextBox_HasFocus( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_HasFocus( byval hTextBoxControl as HWND ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Text.
 ' ----------------------------------------------------------------------------------------
-declare function CTextBox_GetText( byval hTextBoxControl as HWND ) as DWSTRING
-declare function CTextBox_SetText( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
-declare function CTextBox_GetTextLength( byval hTextBoxControl as HWND ) as integer
-declare function CTextBox_GetSelText( byval hTextBoxControl as HWND ) as DWSTRING
-declare function CTextBox_ReplaceSel( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
-declare function CTextBox_Clear( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_GetText( byval hTextBoxControl as HWND ) as DWSTRING
+declare function PsTextBox_SetText( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
+declare function PsTextBox_GetTextLength( byval hTextBoxControl as HWND ) as integer
+declare function PsTextBox_GetSelText( byval hTextBoxControl as HWND ) as DWSTRING
+declare function PsTextBox_ReplaceSel( byval hTextBoxControl as HWND, byval Text as DWSTRING ) as boolean
+declare function PsTextBox_Clear( byval hTextBoxControl as HWND ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Selection. Positions are 0-based character indices; nEnd = -1 selects to the end.
 ' ----------------------------------------------------------------------------------------
-declare sub      CTextBox_GetSel( byval hTextBoxControl as HWND, byref nStart as integer, byref nEnd as integer )
-declare sub      CTextBox_SetSel( byval hTextBoxControl as HWND, byval nStart as integer, byval nEnd as integer )
-declare sub      CTextBox_SelectAll( byval hTextBoxControl as HWND )
+declare sub      PsTextBox_GetSel( byval hTextBoxControl as HWND, byref nStart as integer, byref nEnd as integer )
+declare sub      PsTextBox_SetSel( byval hTextBoxControl as HWND, byval nStart as integer, byval nEnd as integer )
+declare sub      PsTextBox_SelectAll( byval hTextBoxControl as HWND )
 
 ' ----------------------------------------------------------------------------------------
 ' Edit behavior.
 ' ----------------------------------------------------------------------------------------
-declare function CTextBox_GetLimitText( byval hTextBoxControl as HWND ) as integer
-declare sub      CTextBox_SetLimitText( byval hTextBoxControl as HWND, byval nLimit as integer )
-declare function CTextBox_GetReadOnly( byval hTextBoxControl as HWND ) as boolean
-declare function CTextBox_SetReadOnly( byval hTextBoxControl as HWND, byval bReadOnly as boolean ) as boolean
-declare function CTextBox_GetModify( byval hTextBoxControl as HWND ) as boolean
-declare sub      CTextBox_SetModify( byval hTextBoxControl as HWND, byval bModified as boolean )
-declare sub      CTextBox_SetPasswordChar( byval hTextBoxControl as HWND, byval wchChar as integer )   ' 0 = off
+declare function PsTextBox_GetLimitText( byval hTextBoxControl as HWND ) as integer
+declare sub      PsTextBox_SetLimitText( byval hTextBoxControl as HWND, byval nLimit as integer )
+declare function PsTextBox_GetReadOnly( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_SetReadOnly( byval hTextBoxControl as HWND, byval bReadOnly as boolean ) as boolean
+declare function PsTextBox_GetModify( byval hTextBoxControl as HWND ) as boolean
+declare sub      PsTextBox_SetModify( byval hTextBoxControl as HWND, byval bModified as boolean )
+declare sub      PsTextBox_SetPasswordChar( byval hTextBoxControl as HWND, byval wchChar as integer )   ' 0 = off
 ' Select all text when the control gains keyboard focus (see the TYPE field comment:
 ' a mouse click still places the caret). Default false.
-declare function CTextBox_GetSelectOnFocus( byval hTextBoxControl as HWND ) as boolean
-declare sub      CTextBox_SetSelectOnFocus( byval hTextBoxControl as HWND, byval bSelect as boolean )
+declare function PsTextBox_GetSelectOnFocus( byval hTextBoxControl as HWND ) as boolean
+declare sub      PsTextBox_SetSelectOnFocus( byval hTextBoxControl as HWND, byval bSelect as boolean )
 ' Numeric input mode (see the TYPE field comment for the accepted grammar). DecimalPlaces
 ' 0 means integers only. GetValue/SetValue trade the text as a double; SetValue formats
 ' to DecimalPlaces and, like every programmatic setter, is silent. SINGLE-LINE ONLY:
 ' SetNumericMode is a no-op on a multiline control.
-declare function CTextBox_GetNumericMode( byval hTextBoxControl as HWND ) as boolean
-declare sub      CTextBox_SetNumericMode( byval hTextBoxControl as HWND, byval bEnable as boolean )
-declare function CTextBox_GetDecimalPlaces( byval hTextBoxControl as HWND ) as integer
-declare sub      CTextBox_SetDecimalPlaces( byval hTextBoxControl as HWND, byval nPlaces as integer )
-declare function CTextBox_GetValue( byval hTextBoxControl as HWND ) as double
-declare function CTextBox_SetValue( byval hTextBoxControl as HWND, byval nValue as double ) as boolean
+declare function PsTextBox_GetNumericMode( byval hTextBoxControl as HWND ) as boolean
+declare sub      PsTextBox_SetNumericMode( byval hTextBoxControl as HWND, byval bEnable as boolean )
+declare function PsTextBox_GetDecimalPlaces( byval hTextBoxControl as HWND ) as integer
+declare sub      PsTextBox_SetDecimalPlaces( byval hTextBoxControl as HWND, byval nPlaces as integer )
+declare function PsTextBox_GetValue( byval hTextBoxControl as HWND ) as double
+declare function PsTextBox_SetValue( byval hTextBoxControl as HWND, byval nValue as double ) as boolean
 ' Numeric mode only: display the formatted zero ("0.00") instead of an empty box. The
 ' setter stamps it immediately when the box is currently empty and unfocused; after
 ' that, every focus loss with an empty buffer restores it. Trumps the cue banner.
-declare function CTextBox_GetZeroWhenEmpty( byval hTextBoxControl as HWND ) as boolean
-declare sub      CTextBox_SetZeroWhenEmpty( byval hTextBoxControl as HWND, byval bEnable as boolean )
-declare sub      CTextBox_Cut( byval hTextBoxControl as HWND )
-declare sub      CTextBox_Copy( byval hTextBoxControl as HWND )
-declare sub      CTextBox_Paste( byval hTextBoxControl as HWND )
-declare function CTextBox_CanPaste( byval hTextBoxControl as HWND ) as boolean
-declare function CTextBox_Undo( byval hTextBoxControl as HWND ) as boolean
-declare function CTextBox_CanUndo( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_GetZeroWhenEmpty( byval hTextBoxControl as HWND ) as boolean
+declare sub      PsTextBox_SetZeroWhenEmpty( byval hTextBoxControl as HWND, byval bEnable as boolean )
+declare sub      PsTextBox_Cut( byval hTextBoxControl as HWND )
+declare sub      PsTextBox_Copy( byval hTextBoxControl as HWND )
+declare sub      PsTextBox_Paste( byval hTextBoxControl as HWND )
+declare function PsTextBox_CanPaste( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_Undo( byval hTextBoxControl as HWND ) as boolean
+declare function PsTextBox_CanUndo( byval hTextBoxControl as HWND ) as boolean
 ' Left/right margins between the border and the text, in pixels (EM_SETMARGINS).
-declare sub      CTextBox_GetMargins( byval hTextBoxControl as HWND, byref nLeft as integer, byref nRight as integer )
-declare sub      CTextBox_SetMargins( byval hTextBoxControl as HWND, byval nLeft as integer, byval nRight as integer )
+declare sub      PsTextBox_GetMargins( byval hTextBoxControl as HWND, byref nLeft as integer, byref nRight as integer )
+declare sub      PsTextBox_SetMargins( byval hTextBoxControl as HWND, byval nLeft as integer, byval nRight as integer )
 
 ' ----------------------------------------------------------------------------------------
-' Vertical scroll state (multiline). Units are LINES, shaped 1:1 for CVScrollBar:
-' ScrollChangedCallback fires -> GetVScrollInfo -> CVScrollBar_SetRange( total, page, pos );
-' CVScrollBar's ScrollCallback( newPos ) -> ScrollToLine( newPos ). LinesPerPage derives
+' Vertical scroll state (multiline). Units are LINES, shaped 1:1 for PsVScrollBar:
+' ScrollChangedCallback fires -> GetVScrollInfo -> PsVScrollBar_SetRange( total, page, pos );
+' PsVScrollBar's ScrollCallback( newPos ) -> ScrollToLine( newPos ). LinesPerPage derives
 ' from the formatting-rect height and the text font's line height -- a partial line at the
 ' bottom is not counted. Single-line controls report total=1, page=0/1, first=0.
 ' ----------------------------------------------------------------------------------------
-declare sub      CTextBox_GetVScrollInfo( byval hTextBoxControl as HWND, byref nTotalLines as integer, byref nLinesPerPage as integer, byref nFirstVisibleLine as integer )
+declare sub      PsTextBox_GetVScrollInfo( byval hTextBoxControl as HWND, byref nTotalLines as integer, byref nLinesPerPage as integer, byref nFirstVisibleLine as integer )
 ' Scroll so nLine (0-based) becomes the first visible line. The RichEdit clamps overscroll.
-declare sub      CTextBox_ScrollToLine( byval hTextBoxControl as HWND, byval nLine as integer )
+declare sub      PsTextBox_ScrollToLine( byval hTextBoxControl as HWND, byval nLine as integer )
 
 ' ----------------------------------------------------------------------------------------
 ' Appearance. All fonts are caller-owned HFONTs; the control converts the text font to a
 ' CHARFORMATW internally (face/size/charset/bold/italic + ForeColor) and re-applies it
 ' whenever the font or forecolor changes.
 ' ----------------------------------------------------------------------------------------
-declare function CTextBox_GetFont( byval hTextBoxControl as HWND ) as HFONT
-declare function CTextBox_SetFont( byval hTextBoxControl as HWND, byval hFont as HFONT ) as boolean
-declare function CTextBox_GetForeColor( byval hTextBoxControl as HWND ) as COLORREF
-declare function CTextBox_SetForeColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
-declare function CTextBox_GetBackColor( byval hTextBoxControl as HWND ) as COLORREF
-declare function CTextBox_SetBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
+declare function PsTextBox_GetFont( byval hTextBoxControl as HWND ) as HFONT
+declare function PsTextBox_SetFont( byval hTextBoxControl as HWND, byval hFont as HFONT ) as boolean
+declare function PsTextBox_GetForeColor( byval hTextBoxControl as HWND ) as COLORREF
+declare function PsTextBox_SetForeColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
+declare function PsTextBox_GetBackColor( byval hTextBoxControl as HWND ) as COLORREF
+declare function PsTextBox_SetBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF ) as COLORREF
 ' Cue banner: drawn whenever the buffer is empty, focused or not (the caret blinks over
 ' it). Its color is independent of the text ForeColor; its font defaults to the text font.
-declare function CTextBox_GetCueBannerText( byval hTextBoxControl as HWND ) as DWSTRING
-declare sub      CTextBox_SetCueBannerText( byval hTextBoxControl as HWND, byval Text as DWSTRING )
-declare function CTextBox_GetCueBannerColor( byval hTextBoxControl as HWND ) as COLORREF
-declare sub      CTextBox_SetCueBannerColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-declare function CTextBox_GetCueBannerFont( byval hTextBoxControl as HWND ) as HFONT
-declare sub      CTextBox_SetCueBannerFont( byval hTextBoxControl as HWND, byval hFont as HFONT )
+declare function PsTextBox_GetCueBannerText( byval hTextBoxControl as HWND ) as DWSTRING
+declare sub      PsTextBox_SetCueBannerText( byval hTextBoxControl as HWND, byval Text as DWSTRING )
+declare function PsTextBox_GetCueBannerColor( byval hTextBoxControl as HWND ) as COLORREF
+declare sub      PsTextBox_SetCueBannerColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+declare function PsTextBox_GetCueBannerFont( byval hTextBoxControl as HWND ) as HFONT
+declare sub      PsTextBox_SetCueBannerFont( byval hTextBoxControl as HWND, byval hFont as HFONT )
 ' Horizontal alignment of the text (TXT_ALIGN_LEFT / CENTER / RIGHT; LEFT is the default,
 ' so this changed nothing for hosts written before it existed). It applies to the whole
 ' buffer, in both line modes, and it survives every subsequent SetText.
@@ -274,60 +274,60 @@ declare sub      CTextBox_SetCueBannerFont( byval hTextBoxControl as HWND, byval
 ' that. On an empty control that costs nothing. On a control the user has been typing into
 ' IT DISCARDS THE UNDO HISTORY, which is the whole reason to set it early.
 '
-' The margins set by CTextBox_SetMargins still apply -- centring happens between them, not
+' The margins set by PsTextBox_SetMargins still apply -- centring happens between them, not
 ' between the border edges, so a centred value in a control with lopsided margins sits
 ' off-centre by design. Give it equal margins if you want it optically centred.
-declare function CTextBox_GetTextAlign( byval hTextBoxControl as HWND ) as long
-declare sub      CTextBox_SetTextAlign( byval hTextBoxControl as HWND, byval nAlign as long )
+declare function PsTextBox_GetTextAlign( byval hTextBoxControl as HWND ) as long
+declare sub      PsTextBox_SetTextAlign( byval hTextBoxControl as HWND, byval nAlign as long )
 ' Border chrome. Width 0 = borderless; the border color switches to FocusBorderColor
 ' while the RichEdit has focus. CornerRadius rounds the frame -- the arcs are
 ' antialiased now, so a larger radius no longer looks stepped the way it did under
 ' GDI's RoundRect. OuterBackColor fills the pixels outside the corner arcs -- pass the
 ' host's background color so rounded corners blend into it.
-declare function CTextBox_GetBorderColor( byval hTextBoxControl as HWND ) as COLORREF
-declare sub      CTextBox_SetBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-declare function CTextBox_GetFocusBorderColor( byval hTextBoxControl as HWND ) as COLORREF
-declare sub      CTextBox_SetFocusBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
-declare function CTextBox_GetBorderWidth( byval hTextBoxControl as HWND ) as integer
-declare sub      CTextBox_SetBorderWidth( byval hTextBoxControl as HWND, byval nWidth as integer )
-declare function CTextBox_GetCornerRadius( byval hTextBoxControl as HWND ) as integer
-declare sub      CTextBox_SetCornerRadius( byval hTextBoxControl as HWND, byval nRadius as integer )
-declare function CTextBox_GetOuterBackColor( byval hTextBoxControl as HWND ) as COLORREF
-declare sub      CTextBox_SetOuterBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+declare function PsTextBox_GetBorderColor( byval hTextBoxControl as HWND ) as COLORREF
+declare sub      PsTextBox_SetBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+declare function PsTextBox_GetFocusBorderColor( byval hTextBoxControl as HWND ) as COLORREF
+declare sub      PsTextBox_SetFocusBorderColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
+declare function PsTextBox_GetBorderWidth( byval hTextBoxControl as HWND ) as integer
+declare sub      PsTextBox_SetBorderWidth( byval hTextBoxControl as HWND, byval nWidth as integer )
+declare function PsTextBox_GetCornerRadius( byval hTextBoxControl as HWND ) as integer
+declare sub      PsTextBox_SetCornerRadius( byval hTextBoxControl as HWND, byval nRadius as integer )
+declare function PsTextBox_GetOuterBackColor( byval hTextBoxControl as HWND ) as COLORREF
+declare sub      PsTextBox_SetOuterBackColor( byval hTextBoxControl as HWND, byval clr as COLORREF )
 ' Localize the built-in right-click menu (Cut/Copy/Paste/Select All). An empty
 ' SelectAllText keeps the current Select All label, so 3-argument callers are unaffected.
-declare sub      CTextBox_SetMenuText( byval hTextBoxControl as HWND, byval CutText as DWSTRING, byval CopyText as DWSTRING, byval PasteText as DWSTRING, byval SelectAllText as DWSTRING = "" )
+declare sub      PsTextBox_SetMenuText( byval hTextBoxControl as HWND, byval CutText as DWSTRING, byval CopyText as DWSTRING, byval PasteText as DWSTRING, byval SelectAllText as DWSTRING = "" )
 
 ' ----------------------------------------------------------------------------------------
 ' THE BUILT-IN CONTEXT MENU (Cut / Copy / Paste / Select All)
 '
-' It is a CPopupMenu window owned by the control, created at Create and destroyed with it.
+' It is a PsPopupMenu window owned by the control, created at Create and destroyed with it.
 ' Two consequences a host has to know about:
 '
-' 1. THE MESSAGE-PUMP OBLIGATION (not optional). A CPopupMenu is not modal: keyboard
+' 1. THE MESSAGE-PUMP OBLIGATION (not optional). A PsPopupMenu is not modal: keyboard
 '    navigation and click-outside dismissal live in its message filter. A host that never
-'    calls CTextBox_FilterMessage gets a right-click menu that opens and paints but cannot
+'    calls PsTextBox_FilterMessage gets a right-click menu that opens and paints but cannot
 '    be driven from the keyboard and never closes on an outside click:
 '        do while GetMessage(@uMsg, null, 0, 0)
-'            if CTextBox_FilterMessage( @uMsg ) then continue do
+'            if PsTextBox_FilterMessage( @uMsg ) then continue do
 '            ...TranslateMessage/DispatchMessage...
-'    One call serves every CTextBox in the application -- only one menu chain can be open
-'    at a time, and the filter finds it. (An app that also hosts CMenuBar calls that
+'    One call serves every PsTextBox in the application -- only one menu chain can be open
+'    at a time, and the filter finds it. (An app that also hosts PsMenuBar calls that
 '    filter too; the two are independent and each stands down when the other's menu is up.)
 '
-' 2. STYLING IS YOURS. GetContextMenu hands back the popup so the usual CPopupMenu setters
+' 2. STYLING IS YOURS. GetContextMenu hands back the popup so the usual PsPopupMenu setters
 '    (SetColors / SetFonts / SetGlyphs / SetItemHeight) apply -- point them at the same
 '    values the rest of your menus use and the textbox menu matches them. Left alone it
-'    renders with CPopupMenu's own defaults. The handle is stable for the control's
+'    renders with PsPopupMenu's own defaults. The handle is stable for the control's
 '    lifetime, so theming it once at startup is enough; the labels are rebuilt per open
 '    but colors and fonts are not.
 ' ----------------------------------------------------------------------------------------
-' CloseContextMenu dismisses an open menu from any CTextBox. SILENT (no select callback),
+' CloseContextMenu dismisses an open menu from any PsTextBox. SILENT (no select callback),
 ' matching the family's programmatic-setter rule. For hosts with a global "close every
 ' menu" moment -- app deactivation, or a modal dialog about to open.
-declare function CTextBox_GetContextMenu( byval hTextBoxControl as HWND ) as HWND
-declare function CTextBox_FilterMessage( byval pMsg as MSG ptr ) as boolean
-declare sub      CTextBox_CloseContextMenu()
+declare function PsTextBox_GetContextMenu( byval hTextBoxControl as HWND ) as HWND
+declare function PsTextBox_FilterMessage( byval pMsg as MSG ptr ) as boolean
+declare sub      PsTextBox_CloseContextMenu()
 
 ' ----------------------------------------------------------------------------------------
 ' Callbacks. See the type declarations above for each signature and contract.
@@ -337,8 +337,8 @@ declare sub      CTextBox_CloseContextMenu()
 '   MessageCallback       - observe key/mouse/focus/context-menu messages; TRUE suppresses.
 '   ScrollChangedCallback - vertical scroll state may have changed (multiline only).
 ' ----------------------------------------------------------------------------------------
-declare sub      CTextBox_SetChangeCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ChangeCallbackSub )
-declare sub      CTextBox_SetFocusCallback( byval hTextBoxControl as HWND, byval usersub as TXT_FocusCallbackSub )
-declare sub      CTextBox_SetEnterPressedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_EnterPressedCallbackSub )
-declare sub      CTextBox_SetMessageCallback( byval hTextBoxControl as HWND, byval userfunc as TXT_MessageCallbackFunc )
-declare sub      CTextBox_SetScrollChangedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ScrollChangedCallbackSub )
+declare sub      PsTextBox_SetChangeCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ChangeCallbackSub )
+declare sub      PsTextBox_SetFocusCallback( byval hTextBoxControl as HWND, byval usersub as TXT_FocusCallbackSub )
+declare sub      PsTextBox_SetEnterPressedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_EnterPressedCallbackSub )
+declare sub      PsTextBox_SetMessageCallback( byval hTextBoxControl as HWND, byval userfunc as TXT_MessageCallbackFunc )
+declare sub      PsTextBox_SetScrollChangedCallback( byval hTextBoxControl as HWND, byval usersub as TXT_ScrollChangedCallbackSub )

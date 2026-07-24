@@ -1,25 +1,25 @@
 ''
-''  CNumericUpDown.bi  --  owner-drawn numeric up/down (spinner) with an editable value
+''  PsNumericUpDown.bi  --  owner-drawn numeric up/down (spinner) with an editable value
 ''
 
 #pragma once
 
-#include once "CBufferPaint.bi"
-#include once "CTextBox.bi"
+#include once "PsBufferPaint.bi"
+#include once "PsTextBox.bi"
 
 ' Polling timer that guarantees hot-tracking is cleared when the mouse leaves a button.
-' WM_MOUSELEAVE (TME_LEAVE) is not reliably delivered on fast exits, AND the CTextBox child
+' WM_MOUSELEAVE (TME_LEAVE) is not reliably delivered on fast exits, AND the PsTextBox child
 ' covers the middle of our client, so a periodic cursor check is the safety net. Timer ids
 ' are per-window, so every instance can share these two.
 #define IDT_CNUMERICUPDOWN_HOTTRACK   &hCB80
 #define IDT_CNUMERICUPDOWN_REPEAT     &hCB81
-#define CNUMERICUPDOWN_HOTTRACK_MS    100
+#define PSNUMERICUPDOWN_HOTTRACK_MS    100
 
 ' Defaults. The SIZE values are DPI-scaled at Create; every setter afterwards takes raw
 ' pixels and the caller scales (the family rule).
 '
 ' TWO of the three THICKNESS values are NOT DPI-scaled, ever -- a hairline should stay a
-' hairline (CMenuBar's nSeparatorThickness rule): the border and the divider are RULES, and a
+' hairline (PsMenuBar's nSeparatorThickness rule): the border and the divider are RULES, and a
 ' rule that thickens with the display stops reading as a rule.
 '
 ' THE GLYPH THICKNESS IS THE EXCEPTION, and the asymmetry is deliberate -- do not "harmonise"
@@ -50,7 +50,7 @@
 #define CNUD_DEFAULT_DECIMALPLACES   0
 
 ' The three hit-testable parts, plus "nothing". The value cell is reported by HitTest for
-' completeness, but the control never acts on it -- that area belongs to the CTextBox child,
+' completeness, but the control never acts on it -- that area belongs to the PsTextBox child,
 ' which receives its own mouse messages and never routes them here.
 enum
     NUD_PART_NONE = 0
@@ -62,25 +62,25 @@ end enum
 
 ' Colors for the built-in painter. Copied on Set.
 '
-' Flat COLORREF fields with defaults, exactly like CTOGGLE_COLORS and CSELECTBAR_COLORS --
-' read-modify-write is CNumericUpDown_GetColors, assign, CNumericUpDown_SetColors.
+' Flat COLORREF fields with defaults, exactly like PSTOGGLE_COLORS and PSSELECTBAR_COLORS --
+' read-modify-write is PsNumericUpDown_GetColors, assign, PsNumericUpDown_SetColors.
 '
 ' THE CONTROL READS AS ONE FLAT CELL until you hover a button, because ButtonBackColor is
-' defaulted EQUAL to ValueBackColor. That is CSelectBar's trick (BackColorHot = BackColor)
+' defaulted EQUAL to ValueBackColor. That is PsSelectBar's trick (BackColorHot = BackColor)
 ' applied the other way round, and it is what makes the dividers the only thing separating
 ' the three parts at rest. A host that wants visibly raised buttons just sets the field.
 '
-' The value cell's two colors are pushed into the embedded CTextBox rather than painted by
+' The value cell's two colors are pushed into the embedded PsTextBox rather than painted by
 ' us -- the RichEdit draws the number. They live here so a host sets every color of the
 ' control in one place, which is the point of the struct.
-type CNUMERICUPDOWN_COLORS
+type PSNUMERICUPDOWN_COLORS
     BackColor                as COLORREF = BGR( 33, 37, 43)   ' behind the rounded corners
     BorderColor              as COLORREF = BGR( 60, 66, 77)
     FocusBorderColor         as COLORREF = BGR( 86,156,214)   ' while the value field has focus
     BorderColorDisabled      as COLORREF = BGR( 48, 52, 60)
     DividerColor             as COLORREF = BGR( 60, 66, 77)
     DividerColorDisabled     as COLORREF = BGR( 48, 52, 60)
-    ' --- the value cell (handed to the CTextBox, not painted here) ---
+    ' --- the value cell (handed to the PsTextBox, not painted here) ---
     ValueBackColor           as COLORREF = BGR( 44, 49, 58)
     ValueForeColor           as COLORREF = BGR(215,218,224)
     ValueBackColorDisabled   as COLORREF = BGR( 38, 42, 49)
@@ -102,17 +102,17 @@ end type
 ' repeating the centring arithmetic, because SetGlyphSize can change it underneath you.
 '
 ' NOTE WHAT IS NOT HERE: the value text. It is drawn by the RichEdit inside the embedded
-' CTextBox, not by this control and not by a paint callback. A callback replaces the frame,
+' PsTextBox, not by this control and not by a paint callback. A callback replaces the frame,
 ' the cells, the dividers and the glyphs -- never the number.
-type CNUMERICUPDOWN_PAINTINFO
+type PSNUMERICUPDOWN_PAINTINFO
     hCtrl        as HWND                ' the control, so the callback can query it
-    b            as CBufferPaint ptr    ' the control's buffer for this repaint (no copy)
+    b            as PsBufferPaint ptr    ' the control's buffer for this repaint (no copy)
     ' --- Geometry, all precomputed by LayoutControl ---
     rcClient     as RECT                ' the whole client area
     rcFrame      as RECT                ' where the rounded border is stroked
     rcMinus      as RECT                ' the left button cell
     rcDiv1       as RECT                ' the hairline between the "-" cell and the value
-    rcValue      as RECT                ' the value cell -- the CTextBox child sits exactly here
+    rcValue      as RECT                ' the value cell -- the PsTextBox child sits exactly here
     rcDiv2       as RECT                ' the hairline between the value and the "+" cell
     rcPlus       as RECT                ' the right button cell
     rcMinusBar   as RECT                ' the "-" glyph
@@ -128,7 +128,7 @@ type CNUMERICUPDOWN_PAINTINFO
     nValue       as double              ' the current value, already clamped and rounded
 end type
 
-type CNUMERICUPDOWN_MESSAGEINFO
+type PSNUMERICUPDOWN_MESSAGEINFO
     hCtrl        as HWND
     uMsg         as UINT
     wParam       as WPARAM
@@ -144,30 +144,30 @@ end type
 '
 ' It does NOT draw the number: that is the RichEdit child's job, and it paints itself over
 ' whatever this callback puts in rcValue.
-type NUD_PaintCallbackSub as sub( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
+type NUD_PaintCallbackSub as sub( byval p as PSNUMERICUPDOWN_PAINTINFO ptr )
 
 ' Observe messages. Return TRUE if you handled it and want the control's default handling
 ' suppressed, FALSE to let it proceed.
 '
 ' TWO SOURCES FEED THIS ONE CALLBACK. The container's own messages (the mouse over the two
 ' buttons, the timers, enable/disable) arrive directly; the value field's key, wheel and
-' focus messages arrive relayed from the embedded CTextBox's own message callback, with
+' focus messages arrive relayed from the embedded PsTextBox's own message callback, with
 ' m->hCtrl rewritten to THIS control. So a host sees one message stream for the whole
 ' control and never has to know a RichEdit is in there.
 '
 ' CAUTION: the result is IGNORED for two messages.
 '   WM_LBUTTONUP  - the control holds mouse capture across a button press and the up-message
 '                   is what releases it: a callback that suppressed it would strand capture
-'                   and route every subsequent click here (the CListBox bug recorded in
+'                   and route every subsequent click here (the PsListBox bug recorded in
 '                   Learnings.md). Suppressing WM_LBUTTONDOWN suppresses the press, never
 '                   the capture bookkeeping.
 '   WM_KILLFOCUS  - focus loss is what COMMITS a typed value. Suppressing it would leave the
 '                   control displaying text it has not accepted. (WM_SETFOCUS may be
 '                   suppressed; nothing depends on it but the border color.)
-type NUD_MessageCallbackFunc as function( byval m as CNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
+type NUD_MessageCallbackFunc as function( byval m as PSNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
 
 ' The value changed through USER interaction. Fired AFTER the value is clamped, rounded and
-' displayed, so CNumericUpDown_GetValue() = nValue inside the handler.
+' displayed, so PsNumericUpDown_GetValue() = nValue inside the handler.
 '
 ' WHEN IT FIRES: immediately for a button click, an auto-repeat tick, an arrow key, PgUp/PgDn
 ' and the wheel -- every one of those produces a complete value. For TYPING it fires on
@@ -180,9 +180,9 @@ type NUD_MessageCallbackFunc as function( byval m as CNUMERICUPDOWN_MESSAGEINFO 
 type NUD_ValueChangedCallbackSub as sub( byval hCtrl as HWND, byval nValue as double )
 
 
-type CNUMERICUPDOWN
+type PSNUMERICUPDOWN
     hWin            as HWND
-    hTextBox        as HWND               ' the embedded CTextBox (numeric mode, borderless)
+    hTextBox        as HWND               ' the embedded PsTextBox (numeric mode, borderless)
     idc_Ctrl        as long = 0
     ' --- State. Single-valued: there is exactly one of this control, so unlike the
     '     collection siblings there are no indices here to be left dangling. ---
@@ -201,7 +201,7 @@ type CNUMERICUPDOWN
     '     the up-message before any callback runs, WM_CAPTURECHANGED cancels the press and
     '     kills the repeat timer, WM_DESTROY releases, and no callback may suppress an
     '     up-message. ---
-    ' --- Value. THE CTEXTBOX'S TEXT IS THE SOURCE OF TRUTH; nValue is the last value the
+    ' --- Value. THE PSTEXTBOX'S TEXT IS THE SOURCE OF TRUTH; nValue is the last value the
     '     control committed, kept only so a change can be detected and reported once. ---
     nValue          as double = 0.0
     nMin            as double = CNUD_DEFAULT_MIN
@@ -215,7 +215,7 @@ type CNUMERICUPDOWN
     ' deltas well under one 120 notch, and truncating each one would ignore a slow swipe
     ' entirely.
     nWheelAccum     as long = 0
-    colors          as CNUMERICUPDOWN_COLORS
+    colors          as PSNUMERICUPDOWN_COLORS
     hFont           as HFONT = 0          ' CALLER-OWNED; never deleted here
     ' --- Layout. Rects are DERIVED, never set from outside; LayoutControl() owns them.
     '     Layout is lazy: mutators mark it dirty, the next paint (or any rect query) runs
@@ -257,7 +257,7 @@ end type
 ' display: adding 0.1 ten times to a binary double lands on 0.9999999999999999, and a value
 ' that is a hair below the grid formats correctly but compares wrong -- so the drift would be
 ' invisible until the range check at a limit disagreed with the text on screen.
-function CNUMERICUPDOWN.SnapToPlaces( byval nValue as double ) as double
+function PSNUMERICUPDOWN.SnapToPlaces( byval nValue as double ) as double
     dim as double scaleBy = 10.0 ^ this.nDecimalPlaces
     ' Int(x + 0.5) rounds half away from zero for positives; mirror it for negatives so
     ' -0.5 rounds to -1 rather than to 0 (FreeBASIC's Int floors).
@@ -268,7 +268,7 @@ end function
 ' Clamp into [nMin, nMax]. A host that sets an inverted range (min > max) gets nMin, which is
 ' at least deterministic; the setter also swaps them, so this is only reachable if the fields
 ' are written directly.
-function CNUMERICUPDOWN.ClampToRange( byval nValue as double ) as double
+function PSNUMERICUPDOWN.ClampToRange( byval nValue as double ) as double
     if nValue > this.nMax then nValue = this.nMax
     if nValue < this.nMin then nValue = this.nMin
     return nValue
@@ -284,7 +284,7 @@ end function
 '   rcDiv1   = rcMinus.right ..            + nDividerThick
 '   rcPlus   = client.right - nButtonWidth .. client.right
 '   rcDiv2   = rcPlus.left - nDividerThick .. rcPlus.left
-'   rcValue  = rcDiv1.right ..             rcDiv2.left       (the CTextBox goes exactly here)
+'   rcValue  = rcDiv1.right ..             rcDiv2.left       (the PsTextBox goes exactly here)
 '
 ' THE CELLS ARE NOT DEFLATED BY THE BORDER, and that is deliberate. The button cells have to
 ' reach the frame's rounded corners: a cell inset by the border width would round its own
@@ -292,7 +292,7 @@ end function
 ' whenever a hovered button's color differs from it. So the cells span the full client and
 ' the border is stroked over their outer edges, last.
 '
-' rcValue IS inset vertically, by exactly nBorderThick, and only rcValue. The CTextBox child
+' rcValue IS inset vertically, by exactly nBorderThick, and only rcValue. The PsTextBox child
 ' covers every pixel of that rect and paints its own background there -- so a full-height
 ' value cell would put the child on top of the frame's top and bottom rows and the border
 ' would be interrupted across the middle of the control. Nothing else needs the inset,
@@ -308,15 +308,15 @@ end function
 '
 ' OVERFLOW: when the inner width cannot hold both buttons and both dividers, the value cell
 ' collapses to zero width (left = right) and the buttons keep their size, clipping at the
-' client edge. Rects are computed HONESTLY rather than squeezed (CIconPanel's and CTabBar's
+' client edge. Rects are computed HONESTLY rather than squeezed (PsIconPanel's and PsTabBar's
 ' rule), so the buttons stay square and only what is past the edge is lost. rcValue is never
 ' allowed to invert -- a negative-width rect handed to SetWindowPos is a different kind of
 ' bug from a clipped one.
 '
 ' NO DC IS TAKEN. Every number above is authored or derived from the client rect; the value
-' text is measured by the RichEdit, not by us. CNumericUpDown_GetIdealSize is the one place
+' text is measured by the RichEdit, not by us. PsNumericUpDown_GetIdealSize is the one place
 ' this control measures anything, and it opens its own DC.
-sub CNUMERICUPDOWN.LayoutControl()
+sub PSNUMERICUPDOWN.LayoutControl()
     this.bLayoutDirty = false
     if this.hWin = 0 then exit sub
 
@@ -327,7 +327,7 @@ sub CNUMERICUPDOWN.LayoutControl()
 
     ' No geometry yet (created 0x0, sized only once the host shows us). Placement is
     ' impossible, so leave the rects alone and ask to be run again. Note that
-    ' CNumericUpDown_GetIdealSize deliberately does NOT come through here -- it is computed
+    ' PsNumericUpDown_GetIdealSize deliberately does NOT come through here -- it is computed
     ' from the scalars and a measured string, because a host calls it to decide how big to
     ' make the control in the first place.
     if (clientW <= 0) orelse (clientH <= 0) then
@@ -382,7 +382,7 @@ end sub
 ' and only on the up-message or WM_DESTROY -- doing it here would let a callback strand or
 ' double-release it. The repeat timer IS killed here, because it is ours alone and a tick
 ' arriving after the gesture ended would step the value with nothing holding the button.
-sub CNUMERICUPDOWN.CancelPress()
+sub PSNUMERICUPDOWN.CancelPress()
     this.pressedPart = NUD_PART_NONE
     if this.repeatTimerOn then
         if this.hWin then KillTimer( this.hWin, IDT_CNUMERICUPDOWN_REPEAT )
@@ -392,7 +392,7 @@ end sub
 
 ' Mark the layout stale and request a repaint. Every mutator routes through here, which is
 ' what makes layout lazy.
-sub CNUMERICUPDOWN.Refresh()
+sub PSNUMERICUPDOWN.Refresh()
     this.bLayoutDirty = true
     ' Repaint WITH background erase so a region vacated by a shrinking cell is cleared.
     if this.hWin then InvalidateRect( this.hWin, NULL, TRUE )
@@ -408,45 +408,45 @@ end sub
 ' decimal places, and a settable increment.
 '
 ' IT WRAPS A REAL CHILD
-'   The value field is a CTextBox in numeric mode, whose own child is a RichEdit50W. That is
+'   The value field is a PsTextBox in numeric mode, whose own child is a RichEdit50W. That is
 '   where typing, selection, the clipboard, undo and the right-click menu come from -- none
 '   of it is reimplemented here. The window tree is:
 '
-'       CNumericUpDown container      WS_EX_CONTROLPARENT
-'         +-- CTextBox                borderless: THIS control owns all the chrome
+'       PsNumericUpDown container      WS_EX_CONTROLPARENT
+'         +-- PsTextBox                borderless: THIS control owns all the chrome
 '               +-- RichEdit50W       WS_TABSTOP -- the real focus target
 '
-'   CNumericUpDown_GetTextBoxHandle is the escape hatch: every CTextBox_* setter applies to
+'   PsNumericUpDown_GetTextBoxHandle is the escape hatch: every PsTextBox_* setter applies to
 '   it (cue banner, limit text, context-menu theming). Two of them are OWNED by this control
-'   and must not be set behind its back -- CTextBox_SetValue/SetDecimalPlaces (use ours, or
-'   the cached value and the buttons' limit state go stale) and CTextBox_SetBorderWidth
+'   and must not be set behind its back -- PsTextBox_SetValue/SetDecimalPlaces (use ours, or
+'   the cached value and the buttons' limit state go stale) and PsTextBox_SetBorderWidth
 '   (nonzero would draw a second frame inside ours).
 '
 ' FOCUS
 '   Keyboard focus sits on the RichEdit two levels down, so GetFocus() = hCtrl is ALWAYS
-'   false -- use CNumericUpDown_HasFocus(). The frame is drawn in FocusBorderColor while the
+'   false -- use PsNumericUpDown_HasFocus(). The frame is drawn in FocusBorderColor while the
 '   field has focus; there is no separate focus ring and therefore no reserved ring band, so
 '   the control's ideal size does not change when focus arrives.
 '
-'   TAB NAVIGATION works without IsDialogMessage in the host's pump, because CTextBox
+'   TAB NAVIGATION works without IsDialogMessage in the host's pump, because PsTextBox
 '   handles VK_TAB itself. It needs WS_EX_CONTROLPARENT on every window between the RichEdit
 '   and the top-level window -- this container sets it, which is the only reason tabbing
 '   works through the extra nesting level this control adds.
 '
 ' THE HOST MESSAGE-PUMP OBLIGATION -- NOT OPTIONAL
-'   The value field carries CTextBox's built-in right-click Cut/Copy/Paste/Select All menu,
-'   which is a CPopupMenu and therefore not modal: keyboard navigation and click-outside
-'   dismissal live in a message filter. A host that never calls CNumericUpDown_FilterMessage
+'   The value field carries PsTextBox's built-in right-click Cut/Copy/Paste/Select All menu,
+'   which is a PsPopupMenu and therefore not modal: keyboard navigation and click-outside
+'   dismissal live in a message filter. A host that never calls PsNumericUpDown_FilterMessage
 '   gets a menu that opens and paints but cannot be driven from the keyboard and never
 '   closes on an outside click.
 '
 '       do while GetMessage(@uMsg, null, 0, 0)
-'           if CNumericUpDown_FilterMessage( @uMsg ) then continue do
+'           if PsNumericUpDown_FilterMessage( @uMsg ) then continue do
 '           TranslateMessage @uMsg
 '           DispatchMessage @uMsg
 '       loop
 '
-'   It forwards to CTextBox_FilterMessage, so an app already calling that is covered either
+'   It forwards to PsTextBox_FilterMessage, so an app already calling that is covered either
 '   way and calling both is harmless.
 '
 ' NO TOOLTIPS
@@ -454,23 +454,23 @@ end sub
 '   can add its own tool over the control's HWND.
 '
 ' THE CONTROL HANDLE
-'   Every CNumericUpDown_* function takes the handle returned by CNumericUpDown_Create().
+'   Every PsNumericUpDown_* function takes the handle returned by PsNumericUpDown_Create().
 '   It is a real HWND on purpose (not an opaque type): callers legitimately need to treat the
 '   control as a window, e.g. SetWindowPos() to place and size it.
 '
 ' LIFETIME
-'   The control frees itself when its window is destroyed, taking the CTextBox with it. It
+'   The control frees itself when its window is destroyed, taking the PsTextBox with it. It
 '   owns no host resources -- in particular the font is caller-owned and is never deleted.
 '
 ' ----------------------------------------------------------------------------------------
 ' Creation.
 '   CtrlID becomes the control window's id (GWLP_ID), so hosts can find it with GetDlgItem.
-'   The control is created zero-sized: size it with CNumericUpDown_GetIdealSize and position
+'   The control is created zero-sized: size it with PsNumericUpDown_GetIdealSize and position
 '   it with SetWindowPos().
 ' ----------------------------------------------------------------------------------------
-declare function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long ) as HWND
-declare function CNumericUpDown_GetTextBoxHandle( byval hCtrl as HWND ) as HWND
-declare function CNumericUpDown_HasFocus( byval hCtrl as HWND ) as boolean
+declare function PsNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long ) as HWND
+declare function PsNumericUpDown_GetTextBoxHandle( byval hCtrl as HWND ) as HWND
+declare function PsNumericUpDown_HasFocus( byval hCtrl as HWND ) as boolean
 
 ' ----------------------------------------------------------------------------------------
 ' Value.  EVERY SETTER HERE IS SILENT -- only user interaction fires the change callback.
@@ -487,37 +487,37 @@ declare function CNumericUpDown_HasFocus( byval hCtrl as HWND ) as boolean
 '     is "you may not type an arbitrary number here", not "this control is inert" -- that is
 '     SetEnabled.
 ' ----------------------------------------------------------------------------------------
-declare function CNumericUpDown_GetValue( byval hCtrl as HWND ) as double
-declare sub      CNumericUpDown_SetValue( byval hCtrl as HWND, byval nValue as double )
-declare sub      CNumericUpDown_GetRange( byval hCtrl as HWND, byref nMin as double, byref nMax as double )
-declare sub      CNumericUpDown_SetRange( byval hCtrl as HWND, byval nMin as double, byval nMax as double )
-declare function CNumericUpDown_GetIncrement( byval hCtrl as HWND ) as double
-declare sub      CNumericUpDown_SetIncrement( byval hCtrl as HWND, byval nIncrement as double )
-declare function CNumericUpDown_GetLargeIncrement( byval hCtrl as HWND ) as double
-declare sub      CNumericUpDown_SetLargeIncrement( byval hCtrl as HWND, byval nIncrement as double )
-declare function CNumericUpDown_GetDecimalPlaces( byval hCtrl as HWND ) as long
-declare sub      CNumericUpDown_SetDecimalPlaces( byval hCtrl as HWND, byval nPlaces as long )
-declare sub      CNumericUpDown_StepUp( byval hCtrl as HWND )
-declare sub      CNumericUpDown_StepDown( byval hCtrl as HWND )
-declare function CNumericUpDown_GetReadOnly( byval hCtrl as HWND ) as boolean
-declare sub      CNumericUpDown_SetReadOnly( byval hCtrl as HWND, byval bReadOnly as boolean )
+declare function PsNumericUpDown_GetValue( byval hCtrl as HWND ) as double
+declare sub      PsNumericUpDown_SetValue( byval hCtrl as HWND, byval nValue as double )
+declare sub      PsNumericUpDown_GetRange( byval hCtrl as HWND, byref nMin as double, byref nMax as double )
+declare sub      PsNumericUpDown_SetRange( byval hCtrl as HWND, byval nMin as double, byval nMax as double )
+declare function PsNumericUpDown_GetIncrement( byval hCtrl as HWND ) as double
+declare sub      PsNumericUpDown_SetIncrement( byval hCtrl as HWND, byval nIncrement as double )
+declare function PsNumericUpDown_GetLargeIncrement( byval hCtrl as HWND ) as double
+declare sub      PsNumericUpDown_SetLargeIncrement( byval hCtrl as HWND, byval nIncrement as double )
+declare function PsNumericUpDown_GetDecimalPlaces( byval hCtrl as HWND ) as long
+declare sub      PsNumericUpDown_SetDecimalPlaces( byval hCtrl as HWND, byval nPlaces as long )
+declare sub      PsNumericUpDown_StepUp( byval hCtrl as HWND )
+declare sub      PsNumericUpDown_StepDown( byval hCtrl as HWND )
+declare function PsNumericUpDown_GetReadOnly( byval hCtrl as HWND ) as boolean
+declare sub      PsNumericUpDown_SetReadOnly( byval hCtrl as HWND, byval bReadOnly as boolean )
 
 ' ----------------------------------------------------------------------------------------
 ' State and behavior.
 '
 '   SetEnabled(false) greys the whole control, blocks hover, and swallows clicks and keys. It
-'     goes through EnableWindow -- on this container AND on the CTextBox child -- rather than
+'     goes through EnableWindow -- on this container AND on the PsTextBox child -- rather than
 '     setting a cosmetic flag, so the disable is enforced by the system and no SetFocus can
 '     sneak into a control that looks dead. WM_ENABLE syncs the flag back, so a host that
 '     reaches for EnableWindow directly still gets the greyed rendering.
 '   SetAutoRepeat: milliseconds. Either value <= 0 disables repeating (one click = one step).
 '     Repeating stops on its own the moment the value reaches a limit.
 ' ----------------------------------------------------------------------------------------
-declare function CNumericUpDown_GetEnabled( byval hCtrl as HWND ) as boolean
-declare sub      CNumericUpDown_SetEnabled( byval hCtrl as HWND, byval isEnabled as boolean )
-declare sub      CNumericUpDown_GetAutoRepeat( byval hCtrl as HWND, byref nDelayMs as long, byref nIntervalMs as long )
-declare sub      CNumericUpDown_SetAutoRepeat( byval hCtrl as HWND, byval nDelayMs as long, byval nIntervalMs as long )
-declare sub      CNumericUpDown_Refresh( byval hCtrl as HWND )
+declare function PsNumericUpDown_GetEnabled( byval hCtrl as HWND ) as boolean
+declare sub      PsNumericUpDown_SetEnabled( byval hCtrl as HWND, byval isEnabled as boolean )
+declare sub      PsNumericUpDown_GetAutoRepeat( byval hCtrl as HWND, byref nDelayMs as long, byref nIntervalMs as long )
+declare sub      PsNumericUpDown_SetAutoRepeat( byval hCtrl as HWND, byval nDelayMs as long, byval nIntervalMs as long )
+declare sub      PsNumericUpDown_Refresh( byval hCtrl as HWND )
 
 ' ----------------------------------------------------------------------------------------
 ' Layout.  ALL setters take RAW PIXELS -- the caller DPI-scales (the family rule; only the
@@ -526,7 +526,7 @@ declare sub      CNumericUpDown_Refresh( byval hCtrl as HWND )
 ' it is an icon stroke rather than a rule. See the defines at the top of this file.
 '
 '   SetFont is CALLER-OWNED -- the control never deletes the HFONT. It is handed to the
-'     CTextBox, which converts it to a CHARFORMATW internally.
+'     PsTextBox, which converts it to a CHARFORMATW internally.
 '   SetValuePadding: nLeft/nRight are the text margins inside the value cell; nVert is used
 '     only by GetIdealSize, to decide the height around one line of text.
 '   SetGlyphSize: the length of the "-" bar (and of each "+" bar) and its thickness.
@@ -539,36 +539,36 @@ declare sub      CNumericUpDown_Refresh( byval hCtrl as HWND )
 '   The rect queries force a pending layout, so results are always current. They return
 '   FALSE if the control has no geometry yet (created but never sized).
 ' ----------------------------------------------------------------------------------------
-declare function CNumericUpDown_GetFont( byval hCtrl as HWND ) as HFONT
-declare sub      CNumericUpDown_SetFont( byval hCtrl as HWND, byval hFont as HFONT )
-declare function CNumericUpDown_GetButtonWidth( byval hCtrl as HWND ) as long
-declare sub      CNumericUpDown_SetButtonWidth( byval hCtrl as HWND, byval nWidth as long )
-declare sub      CNumericUpDown_GetValuePadding( byval hCtrl as HWND, byref nLeft as long, byref nRight as long, byref nVert as long )
-declare sub      CNumericUpDown_SetValuePadding( byval hCtrl as HWND, byval nLeft as long, byval nRight as long, byval nVert as long )
-declare function CNumericUpDown_GetCornerRadius( byval hCtrl as HWND ) as long
-declare sub      CNumericUpDown_SetCornerRadius( byval hCtrl as HWND, byval nRadius as long )
-declare function CNumericUpDown_GetBorderThickness( byval hCtrl as HWND ) as long
-declare sub      CNumericUpDown_SetBorderThickness( byval hCtrl as HWND, byval nThickness as long )
-declare function CNumericUpDown_GetDividerThickness( byval hCtrl as HWND ) as long
-declare sub      CNumericUpDown_SetDividerThickness( byval hCtrl as HWND, byval nThickness as long )
-declare sub      CNumericUpDown_GetGlyphSize( byval hCtrl as HWND, byref nLength as long, byref nThickness as long )
-declare sub      CNumericUpDown_SetGlyphSize( byval hCtrl as HWND, byval nLength as long, byval nThickness as long )
-declare sub      CNumericUpDown_GetIdealSize( byval hCtrl as HWND, byref nWidth as long, byref nHeight as long )
-declare function CNumericUpDown_GetFrameRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
-declare function CNumericUpDown_GetMinusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
-declare function CNumericUpDown_GetValueRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
-declare function CNumericUpDown_GetPlusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+declare function PsNumericUpDown_GetFont( byval hCtrl as HWND ) as HFONT
+declare sub      PsNumericUpDown_SetFont( byval hCtrl as HWND, byval hFont as HFONT )
+declare function PsNumericUpDown_GetButtonWidth( byval hCtrl as HWND ) as long
+declare sub      PsNumericUpDown_SetButtonWidth( byval hCtrl as HWND, byval nWidth as long )
+declare sub      PsNumericUpDown_GetValuePadding( byval hCtrl as HWND, byref nLeft as long, byref nRight as long, byref nVert as long )
+declare sub      PsNumericUpDown_SetValuePadding( byval hCtrl as HWND, byval nLeft as long, byval nRight as long, byval nVert as long )
+declare function PsNumericUpDown_GetCornerRadius( byval hCtrl as HWND ) as long
+declare sub      PsNumericUpDown_SetCornerRadius( byval hCtrl as HWND, byval nRadius as long )
+declare function PsNumericUpDown_GetBorderThickness( byval hCtrl as HWND ) as long
+declare sub      PsNumericUpDown_SetBorderThickness( byval hCtrl as HWND, byval nThickness as long )
+declare function PsNumericUpDown_GetDividerThickness( byval hCtrl as HWND ) as long
+declare sub      PsNumericUpDown_SetDividerThickness( byval hCtrl as HWND, byval nThickness as long )
+declare sub      PsNumericUpDown_GetGlyphSize( byval hCtrl as HWND, byref nLength as long, byref nThickness as long )
+declare sub      PsNumericUpDown_SetGlyphSize( byval hCtrl as HWND, byval nLength as long, byval nThickness as long )
+declare sub      PsNumericUpDown_GetIdealSize( byval hCtrl as HWND, byref nWidth as long, byref nHeight as long )
+declare function PsNumericUpDown_GetFrameRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+declare function PsNumericUpDown_GetMinusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+declare function PsNumericUpDown_GetValueRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+declare function PsNumericUpDown_GetPlusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
 ' Which part is at pt (CLIENT coordinates)? Public so a host can special-case a region, and
 ' so the self-test can assert that hit-testing and the layout agree.
-declare function CNumericUpDown_HitTest( byval hCtrl as HWND, byval pt as POINT ) as long
+declare function PsNumericUpDown_HitTest( byval hCtrl as HWND, byval pt as POINT ) as long
 
 ' ----------------------------------------------------------------------------------------
 ' Appearance.  SetColors copies the whole struct and pushes the value cell's two colors into
-' the embedded CTextBox. GetColors fills one out, so the read-modify-write "change one color"
+' the embedded PsTextBox. GetColors fills one out, so the read-modify-write "change one color"
 ' idiom is Get, assign, Set.
 ' ----------------------------------------------------------------------------------------
-declare sub      CNumericUpDown_GetColors( byval hCtrl as HWND, byval pColors as CNUMERICUPDOWN_COLORS ptr )
-declare sub      CNumericUpDown_SetColors( byval hCtrl as HWND, byval pColors as CNUMERICUPDOWN_COLORS ptr )
+declare sub      PsNumericUpDown_GetColors( byval hCtrl as HWND, byval pColors as PSNUMERICUPDOWN_COLORS ptr )
+declare sub      PsNumericUpDown_SetColors( byval hCtrl as HWND, byval pColors as PSNUMERICUPDOWN_COLORS ptr )
 
 ' ----------------------------------------------------------------------------------------
 ' Callbacks.  See the type declarations above for each signature and contract.
@@ -579,11 +579,11 @@ declare sub      CNumericUpDown_SetColors( byval hCtrl as HWND, byval pColors as
 '                          default handling (IGNORED for WM_LBUTTONUP and WM_KILLFOCUS).
 '   ValueChangedCallback - the USER changed the value. Programmatic setters are silent.
 ' ----------------------------------------------------------------------------------------
-declare sub      CNumericUpDown_SetPaintCallback( byval hCtrl as HWND, byval usersub as NUD_PaintCallbackSub )
-declare sub      CNumericUpDown_SetMessageCallback( byval hCtrl as HWND, byval userfunc as NUD_MessageCallbackFunc )
-declare sub      CNumericUpDown_SetValueChangedCallback( byval hCtrl as HWND, byval usersub as NUD_ValueChangedCallbackSub )
+declare sub      PsNumericUpDown_SetPaintCallback( byval hCtrl as HWND, byval usersub as NUD_PaintCallbackSub )
+declare sub      PsNumericUpDown_SetMessageCallback( byval hCtrl as HWND, byval userfunc as NUD_MessageCallbackFunc )
+declare sub      PsNumericUpDown_SetValueChangedCallback( byval hCtrl as HWND, byval usersub as NUD_ValueChangedCallbackSub )
 
 ' ----------------------------------------------------------------------------------------
 ' Host message pump.  See THE HOST MESSAGE-PUMP OBLIGATION above -- this is not optional.
 ' ----------------------------------------------------------------------------------------
-declare function CNumericUpDown_FilterMessage( byval pMsg as MSG ptr ) as boolean
+declare function PsNumericUpDown_FilterMessage( byval pMsg as MSG ptr ) as boolean

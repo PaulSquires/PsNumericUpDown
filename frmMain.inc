@@ -1,5 +1,5 @@
 #include once "frmMain.bi"
-#include once "CBufferPaint.bi"
+#include once "PsBufferPaint.bi"
 
 
 ' One settings row: the label the form draws, and the spinner that sits at its right.
@@ -42,7 +42,7 @@ end function
 ' between them.
 ' ========================================================================================
 function frmMain_OnPaint( byval hwnd as HWND ) as LRESULT
-    dim as CBufferPaint b
+    dim as PsBufferPaint b
 
     b.BeginDoubleBuffer(hwnd)
     b.SetBackColor( theme.BackColor )
@@ -69,7 +69,7 @@ function frmMain_OnPaint( byval hwnd as HWND ) as LRESULT
     rcText.right -= margin
     b.SetColors( theme.ForeColor, theme.BackColor )
     b.SetFont( ghFont(GUIFONT_10) )
-    b.PaintText( "Plain CTextBox   (Tab should reach it, and come back)", @rcText, DT_LEFT )
+    b.PaintText( "Plain PsTextBox   (Tab should reach it, and come back)", @rcText, DT_LEFT )
 
     b.EndDoubleBuffer()
 
@@ -93,7 +93,7 @@ sub frmMain_PositionControls( byval hwnd as HWND )
         dim as RECT rcRow = RowRect( hwnd, i )
 
         dim as long iw, ih
-        CNumericUpDown_GetIdealSize( ghSpin(i), iw, ih )
+        PsNumericUpDown_GetIdealSize( ghSpin(i), iw, ih )
 
         dim as long x = rc.right - margin - iw
         dim as long y = rcRow.top + (((rcRow.bottom - rcRow.top) - ih) \ 2)
@@ -204,13 +204,13 @@ end function
 
 
 ' ========================================================================================
-' CNumericUpDown_ValueChangedCallback -- the USER changed a value.
+' PsNumericUpDown_ValueChangedCallback -- the USER changed a value.
 '
 ' Immediately for a button, an arrow key, PgUp/PgDn or the wheel; on COMMIT (ENTER or focus
 ' leaving the field) for typing. Never for the programmatic setters -- which is what the
 ' silent-setter assertions in the self-test check.
 ' ========================================================================================
-sub CNumericUpDown_ValueChangedCallback( byval hCtl as HWND, byval nValue as double )
+sub PsNumericUpDown_ValueChangedCallback( byval hCtl as HWND, byval nValue as double )
     gChangeCount += 1
     dim as string s
     s = "valuechanged  spinner=" & SpinName(hCtl) & "  value=" & str(nValue)
@@ -219,13 +219,13 @@ end sub
 
 
 ' ========================================================================================
-' CNumericUpDown_MessageCallback -- observe, never act.
+' PsNumericUpDown_MessageCallback -- observe, never act.
 '
 ' Note the two SOURCES arriving at one callback: WM_RBUTTONUP comes from the container (the
 ' mouse over a button), while WM_SETFOCUS/WM_KILLFOCUS are relayed up from the RichEdit
-' inside the embedded CTextBox. A host never has to know which is which.
+' inside the embedded PsTextBox. A host never has to know which is which.
 ' ========================================================================================
-function CNumericUpDown_MessageCallback( byval m as CNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
+function PsNumericUpDown_MessageCallback( byval m as PSNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
     select case m->uMsg
     case WM_RBUTTONUP
         dim as string s = "rclick        spinner=" & SpinName(m->hCtrl)
@@ -241,7 +241,7 @@ end function
 
 
 ' ========================================================================================
-' CNumericUpDown_FlatPaintCallback -- row 3's own renderer, REPLACING the built-in painter.
+' PsNumericUpDown_FlatPaintCallback -- row 3's own renderer, REPLACING the built-in painter.
 '
 ' Square corners, square button cells, and a thicker glyph, which makes two things visible at
 ' once: that a callback owns the whole look, and that it still does NOT own the number -- the
@@ -250,7 +250,7 @@ end function
 ' It also honours p->bAtMin / p->bAtMax, which is how a callback gets the at-a-limit greying
 ' without having to know anything about the range.
 ' ========================================================================================
-sub CNumericUpDown_FlatPaintCallback( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
+sub PsNumericUpDown_FlatPaintCallback( byval p as PSNUMERICUPDOWN_PAINTINFO ptr )
 
     ' The value cell's background, square this time.
     p->b->SetBackColor( theme.BackColorHot )
@@ -303,8 +303,8 @@ sub CNumericUpDown_FlatPaintCallback( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
     ' WITHOUT filling it ... a focus ring around an already-painted control being the case
     ' that needed it". Curvature 0 gives square corners.
     '
-    ' This is the third time this defect has been written in this control family (CComboBox
-    ' and CToggle first), every time by copying a sibling's paint callback without
+    ' This is the third time this defect has been written in this control family (PsComboBox
+    ' and PsToggle first), every time by copying a sibling's paint callback without
     ' re-checking it. SelfTest_MinusCellTones now asserts against it.
     dim as RECT rcFrame = p->rcFrame
     p->b->SetPenColor( iif( p->isFocused, theme.FocusAccent, theme.Divider ) )
@@ -314,7 +314,7 @@ end sub
 
 
 ' ========================================================================================
-' Geometry and arithmetic self-test (run with CNUMERICUPDOWN_SELFTEST=1).
+' Geometry and arithmetic self-test (run with PSNUMERICUPDOWN_SELFTEST=1).
 '
 ' Every number is asserted, never eyeballed -- CLAUDE.md's rule, and Learnings.md records
 ' several "verifications" that were invalid because they were done by eye. Expectations are
@@ -368,7 +368,7 @@ end sub
 ' lot. The control still paints, still reports no error, and every geometry assertion in this
 ' file still passes; the row just renders as a solid block.
 '
-' That exact defect has now been found in THREE sibling repos (CComboBox and CToggle before
+' That exact defect has now been found in THREE sibling repos (PsComboBox and PsToggle before
 ' this one), every time in a paint callback copied from a sibling without being re-checked --
 ' the copy-a-sibling trap CLAUDE.md warns about. It is invisible to every other kind of test,
 ' so it gets one of its own here.
@@ -378,7 +378,7 @@ end sub
 ' glyph bar.
 ' ========================================================================================
 private function SelfTest_MinusCellTones( byval h as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(h)
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(h)
     if pNud = 0 then return 0
 
     dim as RECT rcClient
@@ -388,15 +388,15 @@ private function SelfTest_MinusCellTones( byval h as HWND ) as long
     dim as HDC hdc = GetDC(h)
     if hdc = 0 then return 0
 
-    dim as CBufferPaint b
+    dim as PsBufferPaint b
     b.BeginDoubleBuffer( h, hdc, rcClient )
     b.SetBackColor( pNud->colors.BackColor )
     b.PaintClientRect()
 
     ' EVERY rect must be populated. A zeroed rect makes PaintRectFactory bail on a negative
     ' extent, and then a broken callback and a correct one measure identically -- which is
-    ' how CComboBox's first attempt at this probe managed to prove nothing at all.
-    dim p as CNUMERICUPDOWN_PAINTINFO
+    ' how PsComboBox's first attempt at this probe managed to prove nothing at all.
+    dim p as PSNUMERICUPDOWN_PAINTINFO
     p.hCtrl       = h
     p.b           = @b
     p.rcClient    = rcClient
@@ -419,7 +419,7 @@ private function SelfTest_MinusCellTones( byval h as HWND ) as long
     p.bAtMax      = true
     p.nValue      = 3.0
 
-    CNumericUpDown_FlatPaintCallback( @p )
+    PsNumericUpDown_FlatPaintCallback( @p )
 
     dim as HDC memDC = b.getMemDC()
     dim as long nDistinct = 0
@@ -465,22 +465,22 @@ private function SelfTest_CenterOf( byref rc as RECT ) as POINT
 end function
 
 
-sub CNumericUpDown_SelfTest()
+sub PsNumericUpDown_SelfTest()
 
     dim as string s
-    print "---- CNumericUpDown self-test ----"
+    print "---- PsNumericUpDown self-test ----"
 
-    dim as HWND h = CNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_TEST )
-    CNumericUpDown_SetFont( h, ghFont(GUIFONT_10) )
-    CNumericUpDown_SetValueChangedCallback( h, @CNumericUpDown_ValueChangedCallback )
+    dim as HWND h = PsNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_TEST )
+    PsNumericUpDown_SetFont( h, ghFont(GUIFONT_10) )
+    PsNumericUpDown_SetValueChangedCallback( h, @PsNumericUpDown_ValueChangedCallback )
 
-    dim as long bw = CNumericUpDown_GetButtonWidth( h )
-    dim as long bt = CNumericUpDown_GetBorderThickness( h )
-    dim as long dt = CNumericUpDown_GetDividerThickness( h )
+    dim as long bw = PsNumericUpDown_GetButtonWidth( h )
+    dim as long bt = PsNumericUpDown_GetBorderThickness( h )
+    dim as long dt = PsNumericUpDown_GetDividerThickness( h )
     dim as long padL, padR, padV
-    CNumericUpDown_GetValuePadding( h, padL, padR, padV )
+    PsNumericUpDown_GetValuePadding( h, padL, padR, padV )
     dim as long glyphL, glyphT
-    CNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
+    PsNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
 
     s = "defaults: buttonW=" & str(bw) & " border=" & str(bt) & " divider=" & str(dt) & _
         " pad=" & str(padL) & "/" & str(padR) & "/" & str(padV) & _
@@ -492,10 +492,10 @@ sub CNumericUpDown_SelfTest()
     SelfTest_SizeTo( h, 200, 34, cw, ch )
 
     dim as RECT rcFrame, rcMinus, rcValue, rcPlus
-    dim as boolean bGot = CNumericUpDown_GetFrameRect( h, rcFrame )
-    CNumericUpDown_GetMinusRect( h, rcMinus )
-    CNumericUpDown_GetValueRect( h, rcValue )
-    CNumericUpDown_GetPlusRect( h, rcPlus )
+    dim as boolean bGot = PsNumericUpDown_GetFrameRect( h, rcFrame )
+    PsNumericUpDown_GetMinusRect( h, rcMinus )
+    PsNumericUpDown_GetValueRect( h, rcValue )
+    PsNumericUpDown_GetPlusRect( h, rcPlus )
 
     SelfTest_Check( "rect queries succeed once the control has geometry", bGot, "" )
     SelfTest_Check( "rcFrame is the whole client", _
@@ -530,7 +530,7 @@ sub CNumericUpDown_SelfTest()
         "sum=" & str(bw + dt + RectW(rcValue) + dt + bw) & " client=" & str(cw) )
 
     ' ---- the glyphs ---------------------------------------------------------------------
-    dim as CNUMERICUPDOWN ptr pTest = GetNumericUpDownPointer( h )
+    dim as PSNUMERICUPDOWN ptr pTest = GetNumericUpDownPointer( h )
     dim as RECT rcMinusBar = pTest->rcMinusBar
     dim as RECT rcPlusBarH = pTest->rcPlusBarH
     dim as RECT rcPlusBarV = pTest->rcPlusBarV
@@ -557,35 +557,35 @@ sub CNumericUpDown_SelfTest()
         "H=" & str(ptBarH.x) & "," & str(ptBarH.y) & " V=" & str(ptBarV.x) & "," & str(ptBarV.y) )
 
     ' ---- the child sits exactly on the value cell ---------------------------------------
-    dim as HWND hBox = CNumericUpDown_GetTextBoxHandle( h )
-    SelfTest_Check( "the embedded CTextBox exists and is our child", _
+    dim as HWND hBox = PsNumericUpDown_GetTextBoxHandle( h )
+    SelfTest_Check( "the embedded PsTextBox exists and is our child", _
         (hBox <> 0) andalso (GetParent(hBox) = h), "" )
-    SelfTest_Check( "the embedded CTextBox is borderless (this control owns all the chrome)", _
-        CTextBox_GetBorderWidth( hBox ) = 0, "width=" & str(CTextBox_GetBorderWidth(hBox)) )
-    SelfTest_Check( "the embedded CTextBox is in numeric mode", _
-        CTextBox_GetNumericMode( hBox ) = true, "" )
+    SelfTest_Check( "the embedded PsTextBox is borderless (this control owns all the chrome)", _
+        PsTextBox_GetBorderWidth( hBox ) = 0, "width=" & str(PsTextBox_GetBorderWidth(hBox)) )
+    SelfTest_Check( "the embedded PsTextBox is in numeric mode", _
+        PsTextBox_GetNumericMode( hBox ) = true, "" )
 
     ' ---- the number is centred, and stays centred -----------------------------------------
     ' This used to be the one thing on the "only a human can confirm it" list, because the
     ' control sent EM_SETPARAFORMAT itself and had no way to check the result. It now goes
-    ' through CTextBox_SetTextAlign, and the RichEdit can simply be ASKED -- which is the
+    ' through PsTextBox_SetTextAlign, and the RichEdit can simply be ASKED -- which is the
     ' only witness worth asking, since the earlier version was silently doing nothing.
     SelfTest_Check( "the value field is set to centre alignment", _
-        CTextBox_GetTextAlign( hBox ) = TXT_ALIGN_CENTER, _
-        "align=" & str(CTextBox_GetTextAlign(hBox)) )
+        PsTextBox_GetTextAlign( hBox ) = TXT_ALIGN_CENTER, _
+        "align=" & str(PsTextBox_GetTextAlign(hBox)) )
 
     dim pfNum as PARAFORMAT
     pfNum.cbSize = sizeof(PARAFORMAT)
-    RichEdit_GetParaFormat( CTextBox_GetRichEditHandle(hBox), @pfNum )
+    RichEdit_GetParaFormat( PsTextBox_GetRichEditHandle(hBox), @pfNum )
     SelfTest_Check( "the RICHEDIT really is centred (asked, not assumed)", _
         pfNum.wAlignment = PFA_CENTER, _
         "wAlignment=" & str(pfNum.wAlignment) & " PFA_CENTER=" & str(PFA_CENTER) )
 
     ' Every value write replaces the whole buffer, so this is the assertion that the centring
     ' is not quietly lost the first time the user presses "+".
-    CNumericUpDown_SetValue( h, 1234.0 )
+    PsNumericUpDown_SetValue( h, 1234.0 )
     pfNum.cbSize = sizeof(PARAFORMAT)
-    RichEdit_GetParaFormat( CTextBox_GetRichEditHandle(hBox), @pfNum )
+    RichEdit_GetParaFormat( PsTextBox_GetRichEditHandle(hBox), @pfNum )
     SelfTest_Check( "the centring SURVIVES a value change", _
         pfNum.wAlignment = PFA_CENTER, "wAlignment=" & str(pfNum.wAlignment) )
 
@@ -599,15 +599,15 @@ sub CNumericUpDown_SelfTest()
 
     ' ---- hit testing agrees with the layout ---------------------------------------------
     SelfTest_Check( "HitTest finds the minus cell at its centre", _
-        CNumericUpDown_HitTest( h, SelfTest_CenterOf(rcMinus) ) = NUD_PART_MINUS, "" )
+        PsNumericUpDown_HitTest( h, SelfTest_CenterOf(rcMinus) ) = NUD_PART_MINUS, "" )
     SelfTest_Check( "HitTest finds the plus cell at its centre", _
-        CNumericUpDown_HitTest( h, SelfTest_CenterOf(rcPlus) ) = NUD_PART_PLUS, "" )
+        PsNumericUpDown_HitTest( h, SelfTest_CenterOf(rcPlus) ) = NUD_PART_PLUS, "" )
     SelfTest_Check( "HitTest finds the value cell at its centre", _
-        CNumericUpDown_HitTest( h, SelfTest_CenterOf(rcValue) ) = NUD_PART_VALUE, "" )
+        PsNumericUpDown_HitTest( h, SelfTest_CenterOf(rcValue) ) = NUD_PART_VALUE, "" )
     dim as POINT ptOutside
     ptOutside.x = cw + 20 : ptOutside.y = 5
     SelfTest_Check( "HitTest returns NONE outside the client", _
-        CNumericUpDown_HitTest( h, ptOutside ) = NUD_PART_NONE, "" )
+        PsNumericUpDown_HitTest( h, ptOutside ) = NUD_PART_NONE, "" )
 
     ' ---- the thickness scaling asymmetry -------------------------------------------------
     ' Border and divider are RULES and are never DPI-scaled; the glyph bars are the strokes of
@@ -622,14 +622,14 @@ sub CNumericUpDown_SelfTest()
     dim as CWindow ptr pTestWin = AfxCWindowPtr( h )
     dim as long nScaledOne = iif( pTestWin, pTestWin->ScaleY(CNUD_DEFAULT_GLYPHTHICK), 1 )
     if nScaledOne < 1 then nScaledOne = 1
-    CNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
+    PsNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
     SelfTest_Check( "the glyph thickness IS DPI-scaled (it is an icon stroke)", _
         glyphT = nScaledOne, "glyphThick=" & str(glyphT) & " expected=" & str(nScaledOne) )
     SelfTest_Check( "the border and divider are NOT DPI-scaled (they are rules)", _
-        (CNumericUpDown_GetBorderThickness(h) = CNUD_DEFAULT_BORDERTHICK) andalso _
-        (CNumericUpDown_GetDividerThickness(h) = CNUD_DEFAULT_DIVIDERTHICK), _
-        "border=" & str(CNumericUpDown_GetBorderThickness(h)) & _
-        " divider=" & str(CNumericUpDown_GetDividerThickness(h)) )
+        (PsNumericUpDown_GetBorderThickness(h) = CNUD_DEFAULT_BORDERTHICK) andalso _
+        (PsNumericUpDown_GetDividerThickness(h) = CNUD_DEFAULT_DIVIDERTHICK), _
+        "border=" & str(PsNumericUpDown_GetBorderThickness(h)) & _
+        " divider=" & str(PsNumericUpDown_GetDividerThickness(h)) )
 
     ' ---- the custom painter actually draws something ------------------------------------
     ' Drives the demo's own paint callback offscreen and counts colours in the minus cell.
@@ -643,9 +643,9 @@ sub CNumericUpDown_SelfTest()
 
     ' ---- overflow: honest and clipped, never squeezed ------------------------------------
     SelfTest_SizeTo( h, (bw * 2) + (dt * 2) - 10, 34, cw, ch )
-    CNumericUpDown_GetMinusRect( h, rcMinus )
-    CNumericUpDown_GetValueRect( h, rcValue )
-    CNumericUpDown_GetPlusRect( h, rcPlus )
+    PsNumericUpDown_GetMinusRect( h, rcMinus )
+    PsNumericUpDown_GetValueRect( h, rcValue )
+    PsNumericUpDown_GetPlusRect( h, rcPlus )
     SelfTest_Check( "too narrow: the buttons keep their width (honest, not squeezed)", _
         (RectW(rcMinus) = bw) andalso (RectW(rcPlus) = bw), _
         "minus=" & str(RectW(rcMinus)) & " plus=" & str(RectW(rcPlus)) )
@@ -656,8 +656,8 @@ sub CNumericUpDown_SelfTest()
     SelfTest_SizeTo( h, 200, 34, cw, ch )
     ' A range whose MINIMUM is the wider string ("-1000.00" against "50.00"), so the
     ' widest-end assertion below is actually load-bearing rather than accidentally true.
-    CNumericUpDown_SetRange( h, -1000.0, 50.0 )
-    CNumericUpDown_SetDecimalPlaces( h, 2 )
+    PsNumericUpDown_SetRange( h, -1000.0, 50.0 )
+    PsNumericUpDown_SetDecimalPlaces( h, 2 )
 
     ' Measured independently of the control, with the same font: the assertion is that the
     ' control's arithmetic matches an oracle, not that it matches itself.
@@ -676,7 +676,7 @@ sub CNumericUpDown_SelfTest()
     if szHi.cx > widest then widest = szHi.cx
 
     dim as long iw, ih
-    CNumericUpDown_GetIdealSize( h, iw, ih )
+    PsNumericUpDown_GetIdealSize( h, iw, ih )
     SelfTest_Check( "the ideal width = both buttons + both dividers + padding + the widest value", _
         iw = (bw * 2) + (dt * 2) + padL + padR + widest, _
         "ideal=" & str(iw) & " expected=" & str((bw * 2) + (dt * 2) + padL + padR + widest) )
@@ -689,46 +689,46 @@ sub CNumericUpDown_SelfTest()
 
     ' Valid BEFORE the control has ever been sized -- a host calls it precisely to decide how
     ' big to make the thing.
-    dim as HWND hFresh = CNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_TEST )
-    CNumericUpDown_SetFont( hFresh, ghFont(GUIFONT_10) )
+    dim as HWND hFresh = PsNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_TEST )
+    PsNumericUpDown_SetFont( hFresh, ghFont(GUIFONT_10) )
     dim as long fw, fh
-    CNumericUpDown_GetIdealSize( hFresh, fw, fh )
+    PsNumericUpDown_GetIdealSize( hFresh, fw, fh )
     SelfTest_Check( "GetIdealSize is valid on a control that has never been sized", _
         (fw > 0) andalso (fh > 0), "ideal=" & str(fw) & "x" & str(fh) )
     DestroyWindow( hFresh )
 
     ' ---- value arithmetic -----------------------------------------------------------------
-    CNumericUpDown_SetRange( h, 0.0, 10.0 )
-    CNumericUpDown_SetDecimalPlaces( h, 2 )
-    CNumericUpDown_SetIncrement( h, 0.1 )
+    PsNumericUpDown_SetRange( h, 0.0, 10.0 )
+    PsNumericUpDown_SetDecimalPlaces( h, 2 )
+    PsNumericUpDown_SetIncrement( h, 0.1 )
 
-    CNumericUpDown_SetValue( h, 99.0 )
+    PsNumericUpDown_SetValue( h, 99.0 )
     SelfTest_Check( "SetValue clamps above the maximum", _
-        CNumericUpDown_GetValue(h) = 10.0, "value=" & str(CNumericUpDown_GetValue(h)) )
-    CNumericUpDown_SetValue( h, -99.0 )
+        PsNumericUpDown_GetValue(h) = 10.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
+    PsNumericUpDown_SetValue( h, -99.0 )
     SelfTest_Check( "SetValue clamps below the minimum", _
-        CNumericUpDown_GetValue(h) = 0.0, "value=" & str(CNumericUpDown_GetValue(h)) )
+        PsNumericUpDown_GetValue(h) = 0.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
 
     ' THE DECIMAL-GRID TEST. Adding 0.1 ten times to a binary double lands on
     ' 0.9999999999999999 unless every step is snapped back onto the grid -- and a value a
     ' hair below the grid formats correctly while comparing wrong, so the drift stays
     ' invisible until a range check disagrees with the number on screen.
-    CNumericUpDown_SetValue( h, 0.0 )
+    PsNumericUpDown_SetValue( h, 0.0 )
     for i as long = 1 to 10
-        CNumericUpDown_StepUp( h )
+        PsNumericUpDown_StepUp( h )
     next
     SelfTest_Check( "0.1 stepped ten times lands EXACTLY on 1.00 (no floating-point drift)", _
-        CNumericUpDown_GetValue(h) = 1.0, _
-        "value=" & str(CNumericUpDown_GetValue(h)) & " diff=" & str(CNumericUpDown_GetValue(h) - 1.0) )
+        PsNumericUpDown_GetValue(h) = 1.0, _
+        "value=" & str(PsNumericUpDown_GetValue(h)) & " diff=" & str(PsNumericUpDown_GetValue(h) - 1.0) )
 
-    CNumericUpDown_SetValue( h, 10.0 )
-    CNumericUpDown_StepUp( h )
+    PsNumericUpDown_SetValue( h, 10.0 )
+    PsNumericUpDown_StepUp( h )
     SelfTest_Check( "StepUp at the maximum does not exceed it", _
-        CNumericUpDown_GetValue(h) = 10.0, "value=" & str(CNumericUpDown_GetValue(h)) )
-    CNumericUpDown_SetValue( h, 0.0 )
-    CNumericUpDown_StepDown( h )
+        PsNumericUpDown_GetValue(h) = 10.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
+    PsNumericUpDown_SetValue( h, 0.0 )
+    PsNumericUpDown_StepDown( h )
     SelfTest_Check( "StepDown at the minimum does not go below it", _
-        CNumericUpDown_GetValue(h) = 0.0, "value=" & str(CNumericUpDown_GetValue(h)) )
+        PsNumericUpDown_GetValue(h) = 0.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
 
     ' ---- the setters are silent ------------------------------------------------------------
     ' Everything above went through SetValue / StepUp / StepDown / SetRange / SetDecimalPlaces
@@ -737,87 +737,87 @@ sub CNumericUpDown_SelfTest()
         gChangeCount = 0, "callbacks=" & str(gChangeCount) )
 
     ' ---- range validation ------------------------------------------------------------------
-    CNumericUpDown_SetRange( h, 80.0, 20.0 )
+    PsNumericUpDown_SetRange( h, 80.0, 20.0 )
     dim as double nLo, nHi
-    CNumericUpDown_GetRange( h, nLo, nHi )
+    PsNumericUpDown_GetRange( h, nLo, nHi )
     SelfTest_Check( "SetRange swaps an inverted pair rather than accepting it", _
         (nLo = 20.0) andalso (nHi = 80.0), "range=" & str(nLo) & ".." & str(nHi) )
     SelfTest_Check( "SetRange re-clamps the current value into the new range", _
-        CNumericUpDown_GetValue(h) = 20.0, "value=" & str(CNumericUpDown_GetValue(h)) )
+        PsNumericUpDown_GetValue(h) = 20.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
 
-    CNumericUpDown_SetRange( h, 0.0, 100.0 )
-    CNumericUpDown_SetDecimalPlaces( h, 2 )
-    CNumericUpDown_SetValue( h, 16.25 )
-    CNumericUpDown_SetDecimalPlaces( h, 0 )
+    PsNumericUpDown_SetRange( h, 0.0, 100.0 )
+    PsNumericUpDown_SetDecimalPlaces( h, 2 )
+    PsNumericUpDown_SetValue( h, 16.25 )
+    PsNumericUpDown_SetDecimalPlaces( h, 0 )
     SelfTest_Check( "SetDecimalPlaces re-snaps the current value onto the new grid", _
-        CNumericUpDown_GetValue(h) = 16.0, "value=" & str(CNumericUpDown_GetValue(h)) )
-    SelfTest_Check( "SetDecimalPlaces reaches the embedded CTextBox too", _
-        CTextBox_GetDecimalPlaces( hBox ) = 0, "places=" & str(CTextBox_GetDecimalPlaces(hBox)) )
+        PsNumericUpDown_GetValue(h) = 16.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
+    SelfTest_Check( "SetDecimalPlaces reaches the embedded PsTextBox too", _
+        PsTextBox_GetDecimalPlaces( hBox ) = 0, "places=" & str(PsTextBox_GetDecimalPlaces(hBox)) )
 
     ' ---- the wheel ---------------------------------------------------------------------
     ' Driven by a real WM_MOUSEWHEEL, because that is genuinely how a hover-wheel arrives
     ' (Windows' "scroll inactive windows" delivers it to the window under the cursor). No
     ' attempt is made to fake a CLICK -- Learnings.md is explicit that a SendMessage-simulated
     ' click cannot reproduce mouse capture, so that stays in the interactive pass.
-    CNumericUpDown_SetIncrement( h, 1.0 )
-    CNumericUpDown_SetValue( h, 50.0 )
+    PsNumericUpDown_SetIncrement( h, 1.0 )
+    PsNumericUpDown_SetValue( h, 50.0 )
     gChangeCount = 0
 
     dim as WPARAM wpHalf = cast( WPARAM, cast(ulongint, 60) shl 16 )
     SendMessage( h, WM_MOUSEWHEEL, wpHalf, 0 )
     SelfTest_Check( "half a wheel notch does not move the value (sub-notch accumulation)", _
-        (CNumericUpDown_GetValue(h) = 50.0) andalso (gChangeCount = 0), _
-        "value=" & str(CNumericUpDown_GetValue(h)) & " callbacks=" & str(gChangeCount) )
+        (PsNumericUpDown_GetValue(h) = 50.0) andalso (gChangeCount = 0), _
+        "value=" & str(PsNumericUpDown_GetValue(h)) & " callbacks=" & str(gChangeCount) )
 
     SendMessage( h, WM_MOUSEWHEEL, wpHalf, 0 )
     SelfTest_Check( "the second half completes a notch and steps by one increment", _
-        CNumericUpDown_GetValue(h) = 51.0, "value=" & str(CNumericUpDown_GetValue(h)) )
+        PsNumericUpDown_GetValue(h) = 51.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
     SelfTest_Check( "a wheel step NOTIFIES (it is user interaction, unlike StepUp)", _
         gChangeCount = 1, "callbacks=" & str(gChangeCount) )
 
     dim as WPARAM wpDown = cast( WPARAM, cast(ulongint, cast(ushort, -120)) shl 16 )
     SendMessage( h, WM_MOUSEWHEEL, wpDown, 0 )
     SelfTest_Check( "a negative wheel delta steps DOWN", _
-        CNumericUpDown_GetValue(h) = 50.0, "value=" & str(CNumericUpDown_GetValue(h)) )
+        PsNumericUpDown_GetValue(h) = 50.0, "value=" & str(PsNumericUpDown_GetValue(h)) )
 
     ' ---- enable / disable ----------------------------------------------------------------
-    CNumericUpDown_SetEnabled( h, false )
+    PsNumericUpDown_SetEnabled( h, false )
     SelfTest_Check( "SetEnabled(false) disables the container WINDOW", _
-        (IsWindowEnabled(h) = 0) andalso (CNumericUpDown_GetEnabled(h) = false), _
+        (IsWindowEnabled(h) = 0) andalso (PsNumericUpDown_GetEnabled(h) = false), _
         "IsWindowEnabled=" & str(IsWindowEnabled(h)) )
-    SelfTest_Check( "SetEnabled(false) disables the CTextBox too (no SetFocus can sneak in)", _
+    SelfTest_Check( "SetEnabled(false) disables the PsTextBox too (no SetFocus can sneak in)", _
         IsWindowEnabled(hBox) = 0, "IsWindowEnabled=" & str(IsWindowEnabled(hBox)) )
-    dim as double nHeld = CNumericUpDown_GetValue(h)
-    CNumericUpDown_SetEnabled( h, true )
+    dim as double nHeld = PsNumericUpDown_GetValue(h)
+    PsNumericUpDown_SetEnabled( h, true )
     SelfTest_Check( "SetEnabled(true) re-enables both windows and keeps the value", _
         (IsWindowEnabled(h) <> 0) andalso (IsWindowEnabled(hBox) <> 0) andalso _
-        (CNumericUpDown_GetValue(h) = nHeld), "value=" & str(CNumericUpDown_GetValue(h)) )
+        (PsNumericUpDown_GetValue(h) = nHeld), "value=" & str(PsNumericUpDown_GetValue(h)) )
 
     ' ---- read-only -------------------------------------------------------------------------
-    CNumericUpDown_SetReadOnly( h, true )
-    SelfTest_Check( "SetReadOnly reaches the embedded CTextBox", _
-        (CNumericUpDown_GetReadOnly(h) = true) andalso (CTextBox_GetReadOnly(hBox) = true), "" )
+    PsNumericUpDown_SetReadOnly( h, true )
+    SelfTest_Check( "SetReadOnly reaches the embedded PsTextBox", _
+        (PsNumericUpDown_GetReadOnly(h) = true) andalso (PsTextBox_GetReadOnly(hBox) = true), "" )
     gChangeCount = 0
     SendMessage( h, WM_MOUSEWHEEL, cast( WPARAM, cast(ulongint, 120) shl 16 ), 0 )
     SelfTest_Check( "read-only stops TYPING only -- the wheel still steps the value", _
         gChangeCount = 1, "callbacks=" & str(gChangeCount) )
-    CNumericUpDown_SetReadOnly( h, false )
+    PsNumericUpDown_SetReadOnly( h, false )
 
     ' ---- input validation --------------------------------------------------------------
-    CNumericUpDown_SetIncrement( h, -5.0 )
+    PsNumericUpDown_SetIncrement( h, -5.0 )
     SelfTest_Check( "SetIncrement takes the magnitude of a negative increment", _
-        CNumericUpDown_GetIncrement(h) = 5.0, "increment=" & str(CNumericUpDown_GetIncrement(h)) )
-    CNumericUpDown_SetDecimalPlaces( h, -3 )
+        PsNumericUpDown_GetIncrement(h) = 5.0, "increment=" & str(PsNumericUpDown_GetIncrement(h)) )
+    PsNumericUpDown_SetDecimalPlaces( h, -3 )
     SelfTest_Check( "SetDecimalPlaces floors a negative place count at 0", _
-        CNumericUpDown_GetDecimalPlaces(h) = 0, "places=" & str(CNumericUpDown_GetDecimalPlaces(h)) )
-    CNumericUpDown_SetGlyphSize( h, 0, 0 )
-    CNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
+        PsNumericUpDown_GetDecimalPlaces(h) = 0, "places=" & str(PsNumericUpDown_GetDecimalPlaces(h)) )
+    PsNumericUpDown_SetGlyphSize( h, 0, 0 )
+    PsNumericUpDown_GetGlyphSize( h, glyphL, glyphT )
     SelfTest_Check( "SetGlyphSize floors a degenerate glyph at 1x1 rather than drawing nothing", _
         (glyphL = 1) andalso (glyphT = 1), "glyph=" & str(glyphL) & "x" & str(glyphT) )
 
     DestroyWindow( h )
 
-    s = "---- CNumericUpDown self-test: " & str(gTestCount) & " assertions, " & str(gFailCount) & " failed ----"
+    s = "---- PsNumericUpDown self-test: " & str(gTestCount) & " assertions, " & str(gFailCount) & " failed ----"
     print s
 
 end sub
@@ -848,68 +848,68 @@ function frmMain_Show( byval hWndParent as HWND ) as LRESULT
     gRows(5).wszLabel = "Preset   (read-only: buttons yes, typing no)"
 
     for i as long = 0 to SPIN_COUNT - 1
-        ghSpin(i) = CNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_FIRST + i )
-        CNumericUpDown_SetFont( ghSpin(i), ghFont(GUIFONT_10) )
-        CNumericUpDown_SetMessageCallback( ghSpin(i), @CNumericUpDown_MessageCallback )
-        CNumericUpDown_SetValueChangedCallback( ghSpin(i), @CNumericUpDown_ValueChangedCallback )
+        ghSpin(i) = PsNumericUpDown_Create( HWND_FRMMAIN, IDC_FRMMAIN_SPIN_FIRST + i )
+        PsNumericUpDown_SetFont( ghSpin(i), ghFont(GUIFONT_10) )
+        PsNumericUpDown_SetMessageCallback( ghSpin(i), @PsNumericUpDown_MessageCallback )
+        PsNumericUpDown_SetValueChangedCallback( ghSpin(i), @PsNumericUpDown_ValueChangedCallback )
     next
 
     ' Row 0 -- the screenshot's case: an integer font size.
-    CNumericUpDown_SetRange( ghSpin(0), 6.0, 72.0 )
-    CNumericUpDown_SetValue( ghSpin(0), 16.0 )
+    PsNumericUpDown_SetRange( ghSpin(0), 6.0, 72.0 )
+    PsNumericUpDown_SetValue( ghSpin(0), 16.0 )
 
     ' Row 1 -- two decimals and a fractional step, which is the decimal-grid path.
-    CNumericUpDown_SetDecimalPlaces( ghSpin(1), 2 )
-    CNumericUpDown_SetRange( ghSpin(1), 0.5, 3.0 )
-    CNumericUpDown_SetIncrement( ghSpin(1), 0.25 )
-    CNumericUpDown_SetLargeIncrement( ghSpin(1), 1.0 )
-    CNumericUpDown_SetValue( ghSpin(1), 1.5 )
+    PsNumericUpDown_SetDecimalPlaces( ghSpin(1), 2 )
+    PsNumericUpDown_SetRange( ghSpin(1), 0.5, 3.0 )
+    PsNumericUpDown_SetIncrement( ghSpin(1), 0.25 )
+    PsNumericUpDown_SetLargeIncrement( ghSpin(1), 1.0 )
+    PsNumericUpDown_SetValue( ghSpin(1), 1.5 )
 
     ' Row 2 -- custom colours, and a large increment far bigger than the small one.
-    dim as CNUMERICUPDOWN_COLORS clrs
-    CNumericUpDown_GetColors( ghSpin(2), @clrs )
+    dim as PSNUMERICUPDOWN_COLORS clrs
+    PsNumericUpDown_GetColors( ghSpin(2), @clrs )
     clrs.ButtonBackColorHot     = BGR( 62,140, 90)
     clrs.ButtonBackColorPressed = BGR( 42,100, 64)
     clrs.FocusBorderColor       = BGR(120,200,150)
     clrs.GlyphColorHot          = BGR(255,255,255)
-    CNumericUpDown_SetColors( ghSpin(2), @clrs )
-    CNumericUpDown_SetRange( ghSpin(2), 0.0, 100.0 )
-    CNumericUpDown_SetIncrement( ghSpin(2), 5.0 )
-    CNumericUpDown_SetLargeIncrement( ghSpin(2), 25.0 )
-    CNumericUpDown_SetValue( ghSpin(2), 80.0 )
+    PsNumericUpDown_SetColors( ghSpin(2), @clrs )
+    PsNumericUpDown_SetRange( ghSpin(2), 0.0, 100.0 )
+    PsNumericUpDown_SetIncrement( ghSpin(2), 5.0 )
+    PsNumericUpDown_SetLargeIncrement( ghSpin(2), 25.0 )
+    PsNumericUpDown_SetValue( ghSpin(2), 80.0 )
 
     ' Row 3 -- a range narrow enough to sit against a limit on screen, so the "+" button is
     ' drawn disabled from the moment the window opens. The custom painter draws that greying
     ' itself, from p->bAtMax.
-    CNumericUpDown_SetPaintCallback( ghSpin(3), @CNumericUpDown_FlatPaintCallback )
-    CNumericUpDown_SetRange( ghSpin(3), 1.0, 3.0 )
-    CNumericUpDown_SetValue( ghSpin(3), 3.0 )
+    PsNumericUpDown_SetPaintCallback( ghSpin(3), @PsNumericUpDown_FlatPaintCallback )
+    PsNumericUpDown_SetRange( ghSpin(3), 1.0, 3.0 )
+    PsNumericUpDown_SetValue( ghSpin(3), 3.0 )
 
     ' Row 4 -- disabled outright: greyed, no hover, no typing, no stepping.
-    CNumericUpDown_SetRange( ghSpin(4), 25.0, 400.0 )
-    CNumericUpDown_SetValue( ghSpin(4), 100.0 )
-    CNumericUpDown_SetEnabled( ghSpin(4), false )
+    PsNumericUpDown_SetRange( ghSpin(4), 25.0, 400.0 )
+    PsNumericUpDown_SetValue( ghSpin(4), 100.0 )
+    PsNumericUpDown_SetEnabled( ghSpin(4), false )
 
     ' Row 5 -- read-only: the buttons and the wheel still work, typing does not.
-    CNumericUpDown_SetRange( ghSpin(5), 1.0, 5.0 )
-    CNumericUpDown_SetValue( ghSpin(5), 2.0 )
-    CNumericUpDown_SetReadOnly( ghSpin(5), true )
+    PsNumericUpDown_SetRange( ghSpin(5), 1.0, 5.0 )
+    PsNumericUpDown_SetValue( ghSpin(5), 2.0 )
+    PsNumericUpDown_SetReadOnly( ghSpin(5), true )
 
-    ' A plain CTextBox after the spinners. Tab must reach it THROUGH the extra container
-    ' level each spinner adds -- which is the whole reason CNumericUpDown's container carries
+    ' A plain PsTextBox after the spinners. Tab must reach it THROUGH the extra container
+    ' level each spinner adds -- which is the whole reason PsNumericUpDown's container carries
     ' WS_EX_CONTROLPARENT.
-    ghPlainBox = CTextBox_Create( HWND_FRMMAIN, IDC_FRMMAIN_TEXTBOX )
-    CTextBox_SetFont( ghPlainBox, ghFont(GUIFONT_10) )
-    CTextBox_SetForeColor( ghPlainBox, theme.ForeColor )
-    CTextBox_SetBackColor( ghPlainBox, theme.BackColorHot )
-    CTextBox_SetBorderColor( ghPlainBox, theme.Divider )
-    CTextBox_SetFocusBorderColor( ghPlainBox, theme.FocusAccent )
-    CTextBox_SetOuterBackColor( ghPlainBox, theme.BackColor )
-    CTextBox_SetCueBannerText( ghPlainBox, "ordinary text" )
-    CTextBox_SetCueBannerColor( ghPlainBox, theme.ForeColorDisabled )
+    ghPlainBox = PsTextBox_Create( HWND_FRMMAIN, IDC_FRMMAIN_TEXTBOX )
+    PsTextBox_SetFont( ghPlainBox, ghFont(GUIFONT_10) )
+    PsTextBox_SetForeColor( ghPlainBox, theme.ForeColor )
+    PsTextBox_SetBackColor( ghPlainBox, theme.BackColorHot )
+    PsTextBox_SetBorderColor( ghPlainBox, theme.Divider )
+    PsTextBox_SetFocusBorderColor( ghPlainBox, theme.FocusAccent )
+    PsTextBox_SetOuterBackColor( ghPlainBox, theme.BackColor )
+    PsTextBox_SetCueBannerText( ghPlainBox, "ordinary text" )
+    PsTextBox_SetCueBannerColor( ghPlainBox, theme.ForeColorDisabled )
 
     dim as long iw, ih
-    CNumericUpDown_GetIdealSize( ghSpin(0), iw, ih )
+    PsNumericUpDown_GetIdealSize( ghSpin(0), iw, ih )
     dim as string s = "row 0 ideal size: " & str(iw) & "x" & str(ih)
     print s
 
@@ -919,7 +919,7 @@ function frmMain_Show( byval hWndParent as HWND ) as LRESULT
     next
     ShowWindow( ghPlainBox, SW_SHOW )
 
-    if environ("CNUMERICUPDOWN_SELFTEST") = "1" then CNumericUpDown_SelfTest()
+    if environ("PSNUMERICUPDOWN_SELFTEST") = "1" then PsNumericUpDown_SelfTest()
 
     UpdateWindow( pWindow->hWindow )
     ShowWindow( pWindow->hWindow, SW_SHOW )
@@ -931,17 +931,17 @@ function frmMain_Show( byval hWndParent as HWND ) as LRESULT
     '
     ' TWO THINGS TO NOTICE HERE.
     '
-    ' CNumericUpDown_FilterMessage is MANDATORY, not decoration: the value field carries
-    ' CTextBox's right-click menu, which is a CPopupMenu and therefore not modal -- keyboard
+    ' PsNumericUpDown_FilterMessage is MANDATORY, not decoration: the value field carries
+    ' PsTextBox's right-click menu, which is a PsPopupMenu and therefore not modal -- keyboard
     ' navigation and click-outside dismissal both live in that filter.
     '
-    ' There is deliberately NO IsDialogMessage call. CTextBox handles VK_TAB itself, and
+    ' There is deliberately NO IsDialogMessage call. PsTextBox handles VK_TAB itself, and
     ' leaving the dialog manager out is what proves it still works through the extra
     ' container level this control adds. A host that does run IsDialogMessage is fine too.
     do while GetMessage(@uMsg, null, 0, 0)
         if uMsg.message = WM_QUIT then exit do
 
-        if CNumericUpDown_FilterMessage( @uMsg ) then continue do
+        if PsNumericUpDown_FilterMessage( @uMsg ) then continue do
 
         ' Processes accelerator keys for menu commands
         if (pWindow->AccelHandle = 0) orelse (TranslateAccelerator(pWindow->hWindow, pWindow->AccelHandle, @uMsg) = 0) then

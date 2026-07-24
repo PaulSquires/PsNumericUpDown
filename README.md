@@ -28,6 +28,14 @@ label goes beside it, positioned by you.
 
 ---
 
+## What it looks like
+
+![The CNumericUpDown demo](CNumericUpDown.png)
+
+Seven rows: integers, two decimals with a 0.25 step, custom colours, a host-painted one sitting at its maximum so `+` paints disabled, a fully disabled one, a read-only one that still steps from its buttons, and a plain `CTextBox` at the bottom that exists to prove Tab reaches past the spinner and comes back. The value field is a `CTextBox` in numeric mode, so focus lives two levels down — `GetFocus() = hCtrl` is never true.
+
+---
+
 ## Requirements
 
 **Files to copy into your project:**

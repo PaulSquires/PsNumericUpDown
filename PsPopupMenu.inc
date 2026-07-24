@@ -1,9 +1,9 @@
 
 ''
-''  CPopupMenu.inc
+''  PsPopupMenu.inc
 ''
 
-#include once "CPopupMenu.bi"
+#include once "PsPopupMenu.bi"
 
 ' The single open chain's root popup (0 = no chain open). Control-internal shared
 ' state, not a host global: one popup chain at a time is a documented invariant (real
@@ -11,10 +11,10 @@
 dim shared as HWND gPM_OpenRoot
 
 
-private function GetPopupMenuPointer( byval hPopup as HWND ) as CPOPUPMENU ptr
+private function GetPopupMenuPointer( byval hPopup as HWND ) as PSPOPUPMENU ptr
     dim pWindow as CWindow ptr = AfxCWindowPtr(hPopup)
-    dim as CPOPUPMENU ptr pPopup = null
-    if pWindow then pPopup = cast( CPOPUPMENU ptr, pWindow->UserData(0) )
+    dim as PSPOPUPMENU ptr pPopup = null
+    if pWindow then pPopup = cast( PSPOPUPMENU ptr, pWindow->UserData(0) )
     return pPopup
 end function
 
@@ -27,14 +27,14 @@ declare function PM_ShowCore( byval hPopup as HWND, byval nAlign as long, byval 
 
 
 ' ========================================================================================
-' CPOPUPMENU member procedures
+' PSPOPUPMENU member procedures
 ' ========================================================================================
 
 ' Measure every row and assign its rect plus the ideal window size. This is the only
 ' place popup geometry is produced; everything else (hit-testing, painting, showing,
 ' invalidation) consumes it. Unlike a child control, a popup is sized TO its content,
 ' so layout does not depend on the client rect -- only on the items and the fonts.
-sub CPOPUPMENU.LayoutItems()
+sub PSPOPUPMENU.LayoutItems()
     this.bLayoutDirty = false
     if this.hWin = 0 then exit sub
 
@@ -105,7 +105,7 @@ sub CPOPUPMENU.LayoutItems()
 end sub
 
 ' Which row is the given CLIENT point over? -1 for none (window padding / border).
-function CPOPUPMENU.HitTest( byval x as long, byval y as long ) as long
+function PSPOPUPMENU.HitTest( byval x as long, byval y as long ) as long
     dim as POINT pt = ( x, y )
     for i as long = 0 to this.itemCount - 1
         if PtInRect( @this.items(i).rc, pt ) then return i
@@ -117,7 +117,7 @@ end function
 ' and disabled rows, wrapping at either end. Pass nFrom = -1 with nDir = +1 for "first
 ' selectable", nFrom = itemCount with nDir = -1 for "last". Returns -1 when the menu
 ' has no selectable row at all.
-function CPOPUPMENU.NextSelectable( byval nFrom as long, byval nDir as long ) as long
+function PSPOPUPMENU.NextSelectable( byval nFrom as long, byval nDir as long ) as long
     if this.itemCount = 0 then return -1
     if (nDir <> 1) andalso (nDir <> -1) then return -1
     dim as long idx = nFrom
@@ -134,7 +134,7 @@ end function
 
 ' Find a command id in THIS menu only (the deep search lives in PM_FindItemDeep).
 ' id 0 is reserved for separators and never matches.
-function CPOPUPMENU.FindItem( byval id as long ) as long
+function PSPOPUPMENU.FindItem( byval id as long ) as long
     if id = 0 then return -1
     for i as long = 0 to this.itemCount - 1
         if this.items(i).id = id then return i
@@ -142,14 +142,14 @@ function CPOPUPMENU.FindItem( byval id as long ) as long
     return -1
 end function
 
-function CPOPUPMENU.IsValidItem( byval idx as long ) as boolean
+function PSPOPUPMENU.IsValidItem( byval idx as long ) as boolean
     return (idx >= 0) andalso (idx < this.itemCount)
 end function
 
 ' Mark the layout stale and request a repaint. Every mutator routes through here, which
 ' is what makes layout lazy: a burst of AddItem calls (an InitPopup rebuilding an MRU
 ' menu) costs one measuring pass, not N.
-sub CPOPUPMENU.Refresh()
+sub PSPOPUPMENU.Refresh()
     this.bLayoutDirty = true
     if this.hWin then InvalidateRect( this.hWin, NULL, TRUE )
 end sub
@@ -161,7 +161,7 @@ end sub
 
 ' Append a fresh (reset) row, growing the backing store by doubling so a bulk rebuild
 ' is amortized O(1). Returns the new row's index.
-private function PM_AppendItem( byval pThis as CPOPUPMENU ptr ) as long
+private function PM_AppendItem( byval pThis as PSPOPUPMENU ptr ) as long
     dim as long cap = ubound(pThis->items) + 1
     if pThis->itemCount >= cap then
         dim as long newcap = iif( cap = 0, 16, cap * 2 )
@@ -189,7 +189,7 @@ end function
 ' level that owns it through hLevelOut, or -1 / 0.
 private function PM_FindItemDeep( byval hPopup as HWND, byval id as long, byref hLevelOut as HWND ) as long
     hLevelOut = 0
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return -1
     dim as long idx = pThis->FindItem( id )
     if idx <> -1 then
@@ -207,7 +207,7 @@ end function
 
 ' Repaint one row. Silently does nothing for an invalid index. FALSE = no background
 ' erase; the row's rect is fully painted by the paint pass.
-private sub PM_InvalidateItem( byval pThis as CPOPUPMENU ptr, byval idx as long )
+private sub PM_InvalidateItem( byval pThis as PSPOPUPMENU ptr, byval idx as long )
     if pThis = null then exit sub
     if pThis->IsValidItem(idx) = false then exit sub
     InvalidateRect( pThis->hWin, @pThis->items(idx).rc, FALSE )
@@ -217,7 +217,7 @@ end sub
 private function PM_ResolveRootHwnd( byval hAny as HWND ) as HWND
     dim as HWND h = hAny
     for k as long = 1 to 32               ' cycle guard; real menus are a few levels deep
-        dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
+        dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
         if pThis = null then return 0
         if pThis->hParentLevel = 0 then return h
         h = pThis->hParentLevel
@@ -230,7 +230,7 @@ end function
 private function PM_InnermostHwnd( byval hRoot as HWND ) as HWND
     dim as HWND h = hRoot
     for k as long = 1 to 32
-        dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
+        dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
         if pThis = null then return h
         if pThis->hOpenChild = 0 then return h
         h = pThis->hOpenChild
@@ -246,7 +246,7 @@ private function PM_IsChainWindow( byval hTest as HWND ) as boolean
     dim as HWND h = gPM_OpenRoot
     for k as long = 1 to 32
         if h = hTest then return true
-        dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
+        dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(h)
         if pThis = null then return false
         h = pThis->hOpenChild
         if h = 0 then return false
@@ -258,7 +258,7 @@ end function
 ' place the cell formulas live -- the paint pass hands these to the callback so it
 ' never re-derives insets.
 private sub PM_ComputeCellRects( _
-            byval pThis as CPOPUPMENU ptr, _
+            byval pThis as PSPOPUPMENU ptr, _
             byval rcRow as RECT, _
             byref rcCheck as RECT, _
             byref rcText as RECT, _
@@ -273,7 +273,7 @@ end sub
 ' unlink it from its parent. Hiding the chain root also stops the poll timer and
 ' clears gPM_OpenRoot. SILENT -- notifications are the callers' decision.
 private sub PM_HideLevel( byval hPopup as HWND )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
 
     if pThis->hOpenChild then PM_HideLevel( pThis->hOpenChild )
@@ -284,7 +284,7 @@ private sub PM_HideLevel( byval hPopup as HWND )
     pThis->bHoverSel = false
 
     if pThis->hParentLevel then
-        dim as CPOPUPMENU ptr pParent = GetPopupMenuPointer( pThis->hParentLevel )
+        dim as PSPOPUPMENU ptr pParent = GetPopupMenuPointer( pThis->hParentLevel )
         if pParent then
             if pParent->hOpenChild = hPopup then pParent->hOpenChild = 0
         end if
@@ -307,7 +307,7 @@ end sub
 private sub PM_CloseChain( byval hAny as HWND, byval nReason as long, byval bNotify as boolean )
     dim as HWND hRoot = PM_ResolveRootHwnd( hAny )
     if hRoot = 0 then exit sub
-    dim as CPOPUPMENU ptr pRoot = GetPopupMenuPointer( hRoot )
+    dim as PSPOPUPMENU ptr pRoot = GetPopupMenuPointer( hRoot )
     dim as HWND hNotify = 0
     if pRoot then hNotify = pRoot->hNotifyWnd
     PM_HideLevel( hRoot )
@@ -320,7 +320,7 @@ end sub
 ' host (notify window message, then the root's select callback). Closed-before-dispatch
 ' is the contract -- a handler can open a dialog without fighting a live popup.
 private sub PM_ExecuteItem( byval hLevel as HWND, byval idx as long )
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then exit sub
     if pLevel->IsValidItem(idx) = false then exit sub
     dim as boolean bExecutable = _
@@ -332,7 +332,7 @@ private sub PM_ExecuteItem( byval hLevel as HWND, byval idx as long )
     dim as long id = pLevel->items(idx).id
     dim as HWND hRoot = PM_ResolveRootHwnd( hLevel )
     if hRoot = 0 then hRoot = hLevel
-    dim as CPOPUPMENU ptr pRoot = GetPopupMenuPointer( hRoot )
+    dim as PSPOPUPMENU ptr pRoot = GetPopupMenuPointer( hRoot )
     dim as HWND hNotify = 0
     dim as PM_SelectCallbackSub cbSelect = 0
     if pRoot then
@@ -350,11 +350,11 @@ end sub
 ' parent's selection to the row (the leave/poll clear paths stand down for a pinned
 ' parent), and show against the row's right edge.
 private sub PM_OpenSubMenu( byval hParentPopup as HWND, byval idx as long, byval bSelectFirst as boolean )
-    dim as CPOPUPMENU ptr pParent = GetPopupMenuPointer(hParentPopup)
+    dim as PSPOPUPMENU ptr pParent = GetPopupMenuPointer(hParentPopup)
     if pParent = null then exit sub
     if pParent->IsValidItem(idx) = false then exit sub
     dim as HWND hSub = pParent->items(idx).hSubMenu
-    dim as CPOPUPMENU ptr pSub = GetPopupMenuPointer(hSub)
+    dim as PSPOPUPMENU ptr pSub = GetPopupMenuPointer(hSub)
     if pSub = null then exit sub
     if pParent->items(idx).isDisabled then exit sub
 
@@ -390,7 +390,7 @@ end sub
 ' closes any other open chain first (a silent internal switch), then claims
 ' gPM_OpenRoot and starts the safety-net poll timer.
 private function PM_ShowCore( byval hPopup as HWND, byval nAlign as long, byval rcAnchor as RECT ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
 
     if pThis->hParentLevel = 0 then
@@ -456,7 +456,7 @@ private function PM_ShowCore( byval hPopup as HWND, byval nAlign as long, byval 
     if pThis->hParentLevel = 0 then
         gPM_OpenRoot = hPopup
         if pThis->pollTimerOn = false then
-            SetTimer( hPopup, IDT_CPOPUPMENU_POLL, CPOPUPMENU_POLL_MS, NULL )
+            SetTimer( hPopup, IDT_CPOPUPMENU_POLL, PSPOPUPMENU_POLL_MS, NULL )
             pThis->pollTimerOn = true
         end if
     end if
@@ -469,7 +469,7 @@ end function
 ' or keyboard navigation gets wiped ~100ms after every keypress.
 private sub PM_PollHoverNet( byval hRoot as HWND )
     dim as HWND hInner = PM_InnermostHwnd( hRoot )
-    dim as CPOPUPMENU ptr pInner = GetPopupMenuPointer( hInner )
+    dim as PSPOPUPMENU ptr pInner = GetPopupMenuPointer( hInner )
     if pInner = null then exit sub
     dim as boolean bCandidate = (pInner->nCurSel <> -1) andalso (pInner->hOpenChild = 0)
     if bCandidate then
@@ -488,7 +488,7 @@ end sub
 ' The safety-net poll (chain root only): close the chain when the foreground moved
 ' outside the owner+chain set (the popups never activate, so they cannot see focus
 ' loss themselves), and clear a hover highlight WM_MOUSELEAVE failed to clear.
-private sub PM_PollTick( byval hRoot as HWND, byval pRoot as CPOPUPMENU ptr )
+private sub PM_PollTick( byval hRoot as HWND, byval pRoot as PSPOPUPMENU ptr )
     if gPM_OpenRoot <> hRoot then exit sub
 
     dim as HWND hFg = GetForegroundWindow()
@@ -506,8 +506,8 @@ end sub
 ' The built-in row painter (the default when no paint callback is set). Draws from the
 ' colors struct and the borrowed fonts; a disabled row never lights up (ForeColorDisabled
 ' over the NORMAL background).
-private sub PM_DefaultPaintItem( byval pThis as CPOPUPMENU ptr, byval p as CPOPUPMENU_PAINTINFO ptr )
-    dim as CBufferPaint ptr b = p->b
+private sub PM_DefaultPaintItem( byval pThis as PSPOPUPMENU ptr, byval p as PSPOPUPMENU_PAINTINFO ptr )
+    dim as PsBufferPaint ptr b = p->b
 
     if p->isSeparator then
         b->SetBackColor( pThis->colors.BackColor )
@@ -558,16 +558,16 @@ end sub
 
 
 ' ========================================================================================
-' Process WM_PAINT message for window: CPopupMenu
+' Process WM_PAINT message for window: PsPopupMenu
 ' ========================================================================================
-private function CPopupMenu_OnPaint( byval hwnd as HWND ) as LRESULT
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hwnd)
+private function PsPopupMenu_OnPaint( byval hwnd as HWND ) as LRESULT
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hwnd)
     if pThis = null then return 0
 
     ' Consume any pending layout before painting (the lazy-layout consume point).
     if pThis->bLayoutDirty then pThis->LayoutItems()
 
-    dim as CBufferPaint b
+    dim as PsBufferPaint b
     b.BeginDoubleBuffer(hwnd)
 
     ' Fill the whole window (rows + padding) with the panel background.
@@ -575,7 +575,7 @@ private function CPopupMenu_OnPaint( byval hwnd as HWND ) as LRESULT
     b.PaintClientRect()
 
     ' Rows: the host's per-item callback when set, else the built-in painter.
-    dim p as CPOPUPMENU_PAINTINFO
+    dim p as PSPOPUPMENU_PAINTINFO
     p.hPopup = hwnd
     p.b = @b
     for i as long = 0 to pThis->itemCount - 1
@@ -621,23 +621,23 @@ end function
 
 
 ' ========================================================================================
-' CPopupMenu Window procedure
+' PsPopupMenu Window procedure
 '
 ' This control has no child windows: the rows are painted rects, hit-test is a row
 ' lookup, and every message is handled here.
 ' ========================================================================================
-function CPopupMenu_WndProc( _
+function PsPopupMenu_WndProc( _
             byval hwnd   as HWND, _
             byval uMsg   as UINT, _
             byval wParam as WPARAM, _
             byval lParam as LPARAM _
             ) as LRESULT
 
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer( hwnd )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer( hwnd )
 
     select case uMsg
     case WM_PAINT
-        return CPopupMenu_OnPaint( hwnd )
+        return PsPopupMenu_OnPaint( hwnd )
 
     ' The popup must never steal activation (and with it, focus) from the host: the
     ' click is still delivered, the host's title bar stays painted active, and the
@@ -653,7 +653,7 @@ function CPopupMenu_WndProc( _
             tme.cbSize = sizeof(TrackMouseEvent)
             tme.dwFlags = TME_HOVER or TME_LEAVE
             tme.hwndTrack = hwnd
-            tme.dwHoverTime = CPOPUPMENU_HOVER_MS
+            tme.dwHoverTime = PSPOPUPMENU_HOVER_MS
             TrackMouseEvent(@tme)
 
             ' Hover IS selection (menu semantics): move the single highlight, repainting
@@ -698,7 +698,7 @@ function CPopupMenu_WndProc( _
             ' clears; a keyboard-set one stays (the cursor was never on it to begin
             ' with, so the mouse leaving says nothing about it).
             if pThis->hOpenChild then
-                dim as CPOPUPMENU ptr pChild = GetPopupMenuPointer( pThis->hOpenChild )
+                dim as PSPOPUPMENU ptr pChild = GetPopupMenuPointer( pThis->hOpenChild )
                 dim as long nPin = -1
                 if pChild then nPin = pChild->nParentItem
                 if pThis->nCurSel <> nPin then
@@ -771,7 +771,7 @@ function CPopupMenu_WndProc( _
             ' Unlink from a live chain so the survivors' links stay truthful.
             if gPM_OpenRoot = hwnd then gPM_OpenRoot = 0
             if pThis->hParentLevel then
-                dim as CPOPUPMENU ptr pParent = GetPopupMenuPointer( pThis->hParentLevel )
+                dim as PSPOPUPMENU ptr pParent = GetPopupMenuPointer( pThis->hParentLevel )
                 if pParent then
                     if pParent->hOpenChild = hwnd then pParent->hOpenChild = 0
                 end if
@@ -806,13 +806,13 @@ end function
 ' PUBLIC API implementation
 ' ========================================================================================
 
-function CPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as HWND
+function PsPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as HWND
     dim pWindow as CWindow ptr = new CWindow
 
     ' WS_POPUP owned by the host's window (z-order above it, hidden with it on
     ' minimize). WS_EX_NOACTIVATE + the MA_NOACTIVATE answer keep it from ever taking
     ' activation; WS_EX_TOOLWINDOW keeps it out of the taskbar and Alt-Tab.
-    dim as HWND hCtrl = pWindow->Create( hOwner, "", @CPopupMenu_WndProc, _
+    dim as HWND hCtrl = pWindow->Create( hOwner, "", @PsPopupMenu_WndProc, _
             0, 0, 0, 0, _
             WS_POPUP or WS_CLIPSIBLINGS or WS_CLIPCHILDREN, _
             WS_EX_TOOLWINDOW or WS_EX_NOACTIVATE )
@@ -825,17 +825,17 @@ function CPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as 
     ' no-shadow silently.
     pWindow->ClassStyle = CS_DBLCLKS or CS_DROPSHADOW
 
-    dim as CPOPUPMENU ptr pThis = new CPOPUPMENU
+    dim as PSPOPUPMENU ptr pThis = new PSPOPUPMENU
     pThis->hWin = hCtrl
     pThis->idc_Popup = CtrlID
     pThis->hOwner = hOwner
-    pThis->nItemHeight      = pWindow->ScaleY( CPOPUPMENU_DEFAULT_ITEMHEIGHT )
-    pThis->nSeparatorHeight = pWindow->ScaleY( CPOPUPMENU_DEFAULT_SEPHEIGHT )
-    pThis->nCheckColWidth   = pWindow->ScaleX( CPOPUPMENU_DEFAULT_CHECKCOL )
-    pThis->nChevronColWidth = pWindow->ScaleX( CPOPUPMENU_DEFAULT_CHEVRONCOL )
-    pThis->nAccelGap        = pWindow->ScaleX( CPOPUPMENU_DEFAULT_ACCELGAP )
-    pThis->nHPadding        = pWindow->ScaleX( CPOPUPMENU_DEFAULT_HPADDING )
-    pThis->nVPadding        = pWindow->ScaleY( CPOPUPMENU_DEFAULT_VPADDING )
+    pThis->nItemHeight      = pWindow->ScaleY( PSPOPUPMENU_DEFAULT_ITEMHEIGHT )
+    pThis->nSeparatorHeight = pWindow->ScaleY( PSPOPUPMENU_DEFAULT_SEPHEIGHT )
+    pThis->nCheckColWidth   = pWindow->ScaleX( PSPOPUPMENU_DEFAULT_CHECKCOL )
+    pThis->nChevronColWidth = pWindow->ScaleX( PSPOPUPMENU_DEFAULT_CHEVRONCOL )
+    pThis->nAccelGap        = pWindow->ScaleX( PSPOPUPMENU_DEFAULT_ACCELGAP )
+    pThis->nHPadding        = pWindow->ScaleX( PSPOPUPMENU_DEFAULT_HPADDING )
+    pThis->nVPadding        = pWindow->ScaleY( PSPOPUPMENU_DEFAULT_VPADDING )
     pThis->nBorderWidth     = pWindow->ScaleX( 1 )
     if pThis->nBorderWidth < 1 then pThis->nBorderWidth = 1
     ' Plain Unicode defaults that render in any text font; hosts with a glyph font
@@ -849,8 +849,8 @@ function CPopupMenu_Create( byval hOwner as HWND, byval CtrlID as long = 0 ) as 
 end function
 
 
-function CPopupMenu_AddItem( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "", byval bDisabled as boolean = false, byval bChecked as boolean = false ) as long
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_AddItem( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "", byval bDisabled as boolean = false, byval bChecked as boolean = false ) as long
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return -1
     dim as long idx = PM_AppendItem( pThis )
     with pThis->items(idx)
@@ -865,8 +865,8 @@ function CPopupMenu_AddItem( byval hPopup as HWND, byval id as long, byval Capti
 end function
 
 
-function CPopupMenu_AddSeparator( byval hPopup as HWND ) as long
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_AddSeparator( byval hPopup as HWND ) as long
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return -1
     dim as long idx = PM_AppendItem( pThis )
     pThis->items(idx).isSeparator = true
@@ -875,8 +875,8 @@ function CPopupMenu_AddSeparator( byval hPopup as HWND ) as long
 end function
 
 
-function CPopupMenu_GetItemCount( byval hPopup as HWND ) as long
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_GetItemCount( byval hPopup as HWND ) as long
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return 0
     return pThis->itemCount
 end function
@@ -886,11 +886,11 @@ end function
 ' tree). OWNERSHIP TRANSFERS: the parent destroys the attached window when it is
 ' destroyed. Attaching over an existing submenu destroys the old one; hSubMenu = 0
 ' detaches without destroying (ownership returns to the caller).
-function CPopupMenu_SetItemSubMenu( byval hPopup as HWND, byval id as long, byval hSubMenu as HWND ) as boolean
+function PsPopupMenu_SetItemSubMenu( byval hPopup as HWND, byval id as long, byval hSubMenu as HWND ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     dim as HWND hOld = pLevel->items(idx).hSubMenu
     if (hOld <> 0) andalso (hOld <> hSubMenu) then DestroyWindow( hOld )
@@ -900,11 +900,11 @@ function CPopupMenu_SetItemSubMenu( byval hPopup as HWND, byval id as long, byva
 end function
 
 
-function CPopupMenu_GetItemSubMenu( byval hPopup as HWND, byval id as long ) as HWND
+function PsPopupMenu_GetItemSubMenu( byval hPopup as HWND, byval id as long ) as HWND
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return 0
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return 0
     return pLevel->items(idx).hSubMenu
 end function
@@ -912,11 +912,11 @@ end function
 
 ' Delete the item with the given command id (searched through the tree), destroying
 ' any submenu window attached to it.
-function CPopupMenu_DeleteItem( byval hPopup as HWND, byval id as long ) as boolean
+function PsPopupMenu_DeleteItem( byval hPopup as HWND, byval id as long ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     if pLevel->items(idx).hSubMenu then
         DestroyWindow( pLevel->items(idx).hSubMenu )
@@ -940,8 +940,8 @@ end function
 
 ' Remove every item from THIS popup (not the tree above it), destroying attached
 ' submenu windows. The InitPopup rebuild path: Clear + AddItem*.
-sub CPopupMenu_Clear( byval hPopup as HWND )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_Clear( byval hPopup as HWND )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     for i as long = 0 to pThis->itemCount - 1
         with pThis->items(i)
@@ -961,11 +961,11 @@ sub CPopupMenu_Clear( byval hPopup as HWND )
 end sub
 
 
-function CPopupMenu_SetItemEnabled( byval hPopup as HWND, byval id as long, byval bEnabled as boolean ) as boolean
+function PsPopupMenu_SetItemEnabled( byval hPopup as HWND, byval id as long, byval bEnabled as boolean ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     pLevel->items(idx).isDisabled = (bEnabled = false)
     PM_InvalidateItem( pLevel, idx )
@@ -973,21 +973,21 @@ function CPopupMenu_SetItemEnabled( byval hPopup as HWND, byval id as long, byva
 end function
 
 
-function CPopupMenu_GetItemEnabled( byval hPopup as HWND, byval id as long ) as boolean
+function PsPopupMenu_GetItemEnabled( byval hPopup as HWND, byval id as long ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     return (pLevel->items(idx).isDisabled = false)
 end function
 
 
-function CPopupMenu_SetItemChecked( byval hPopup as HWND, byval id as long, byval bChecked as boolean ) as boolean
+function PsPopupMenu_SetItemChecked( byval hPopup as HWND, byval id as long, byval bChecked as boolean ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     pLevel->items(idx).isChecked = bChecked
     PM_InvalidateItem( pLevel, idx )
@@ -995,21 +995,21 @@ function CPopupMenu_SetItemChecked( byval hPopup as HWND, byval id as long, byva
 end function
 
 
-function CPopupMenu_GetItemChecked( byval hPopup as HWND, byval id as long ) as boolean
+function PsPopupMenu_GetItemChecked( byval hPopup as HWND, byval id as long ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     return pLevel->items(idx).isChecked
 end function
 
 
-function CPopupMenu_SetItemText( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "" ) as boolean
+function PsPopupMenu_SetItemText( byval hPopup as HWND, byval id as long, byval Caption as DWSTRING, byval Accel as DWSTRING = "" ) as boolean
     dim as HWND hLevel
     dim as long idx = PM_FindItemDeep( hPopup, id, hLevel )
     if idx = -1 then return false
-    dim as CPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
+    dim as PSPOPUPMENU ptr pLevel = GetPopupMenuPointer(hLevel)
     if pLevel = null then return false
     pLevel->items(idx).wszCaption = Caption
     pLevel->items(idx).wszAccel = Accel
@@ -1019,8 +1019,8 @@ function CPopupMenu_SetItemText( byval hPopup as HWND, byval id as long, byval C
 end function
 
 
-function CPopupMenu_GetItemRect( byval hPopup as HWND, byval idx as long, byref rc as RECT ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_GetItemRect( byval hPopup as HWND, byval idx as long, byref rc as RECT ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     SetRectEmpty( @rc )
     if pThis = null then return false
     if pThis->IsValidItem(idx) = false then return false
@@ -1032,16 +1032,16 @@ end function
 
 ' The inverse of GetItemRect. Forces a pending layout for the same reason the rect query
 ' does -- a caller asking before the first paint must not get stale (or empty) geometry.
-function CPopupMenu_HitTest( byval hPopup as HWND, byval x as long, byval y as long ) as long
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_HitTest( byval hPopup as HWND, byval x as long, byval y as long ) as long
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return -1
     if pThis->bLayoutDirty then pThis->LayoutItems()
     return pThis->HitTest( x, y )
 end function
 
 
-function CPopupMenu_GetIdealSize( byval hPopup as HWND, byref nWidth as long, byref nHeight as long ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_GetIdealSize( byval hPopup as HWND, byref nWidth as long, byref nHeight as long ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     nWidth = 0
     nHeight = 0
     if pThis = null then return false
@@ -1053,8 +1053,8 @@ function CPopupMenu_GetIdealSize( byval hPopup as HWND, byref nWidth as long, by
 end function
 
 
-function CPopupMenu_SetMinWidth( byval hPopup as HWND, byval nMinWidth as long ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_SetMinWidth( byval hPopup as HWND, byval nMinWidth as long ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
     if nMinWidth < 0 then nMinWidth = 0
     pThis->nMinWidth = nMinWidth
@@ -1063,8 +1063,8 @@ function CPopupMenu_SetMinWidth( byval hPopup as HWND, byval nMinWidth as long )
 end function
 
 
-sub CPopupMenu_SetItemHeight( byval hPopup as HWND, byval nItemHeight as long )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetItemHeight( byval hPopup as HWND, byval nItemHeight as long )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     if nItemHeight < 1 then nItemHeight = 1
     pThis->nItemHeight = nItemHeight
@@ -1075,8 +1075,8 @@ end sub
 ' Separator rows only. Independent of the item height on purpose: a host running a
 ' compact item height still wants the SAME thin rule, not a proportionally thinner one.
 ' Set it equal to the item height for uniform rows (the pre-2026-07-21 look).
-sub CPopupMenu_SetSeparatorHeight( byval hPopup as HWND, byval nSeparatorHeight as long )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetSeparatorHeight( byval hPopup as HWND, byval nSeparatorHeight as long )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     if nSeparatorHeight < 1 then nSeparatorHeight = 1
     pThis->nSeparatorHeight = nSeparatorHeight
@@ -1087,8 +1087,8 @@ end sub
 ' The rule's weight in pixels, independent of the row height it sits in. Refresh (not a
 ' bare repaint) because a host may set this before the first show, when the layout is
 ' still pending -- and it costs nothing when it is not.
-sub CPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval nThickness as long )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval nThickness as long )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     if nThickness < 1 then nThickness = 1
     pThis->nSeparatorThickness = nThickness
@@ -1096,8 +1096,8 @@ sub CPopupMenu_SetSeparatorThickness( byval hPopup as HWND, byval nThickness as 
 end sub
 
 
-sub CPopupMenu_SetColors( byval hPopup as HWND, byval pColors as CPOPUPMENU_COLORS ptr )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetColors( byval hPopup as HWND, byval pColors as PSPOPUPMENU_COLORS ptr )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     if pColors = null then exit sub
     pThis->colors = *pColors              ' copied; the caller's struct stays theirs
@@ -1105,8 +1105,8 @@ sub CPopupMenu_SetColors( byval hPopup as HWND, byval pColors as CPOPUPMENU_COLO
 end sub
 
 
-sub CPopupMenu_SetFonts( byval hPopup as HWND, byval hTextFont as HFONT, byval hGlyphFont as HFONT = 0 )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetFonts( byval hPopup as HWND, byval hTextFont as HFONT, byval hGlyphFont as HFONT = 0 )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->hTextFont = hTextFont
     pThis->hGlyphFont = hGlyphFont
@@ -1115,8 +1115,8 @@ sub CPopupMenu_SetFonts( byval hPopup as HWND, byval hTextFont as HFONT, byval h
 end sub
 
 
-sub CPopupMenu_SetGlyphs( byval hPopup as HWND, byval wszCheck as DWSTRING, byval wszChevron as DWSTRING )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetGlyphs( byval hPopup as HWND, byval wszCheck as DWSTRING, byval wszChevron as DWSTRING )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->wszCheckGlyph = wszCheck
     pThis->wszChevronGlyph = wszChevron
@@ -1125,8 +1125,8 @@ end sub
 
 
 ' Show at a screen point (the context-menu door). Always shows as a chain ROOT.
-function CPopupMenu_Show( byval hPopup as HWND, byval x as long, byval y as long ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_Show( byval hPopup as HWND, byval x as long, byval y as long ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
     pThis->hParentLevel = 0
     pThis->nParentItem = -1
@@ -1137,8 +1137,8 @@ end function
 
 ' Show against a screen anchor rect (PM_ALIGN_BELOW / PM_ALIGN_RIGHT). Always shows as
 ' a chain ROOT -- submenu levels are opened internally by their parent level.
-function CPopupMenu_ShowForRect( byval hPopup as HWND, byval rcAnchor as RECT, byval nAlign as long ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_ShowForRect( byval hPopup as HWND, byval rcAnchor as RECT, byval nAlign as long ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
     pThis->hParentLevel = 0
     pThis->nParentItem = -1
@@ -1146,32 +1146,32 @@ function CPopupMenu_ShowForRect( byval hPopup as HWND, byval rcAnchor as RECT, b
 end function
 
 
-sub CPopupMenu_Hide( byval hPopup as HWND )
+sub PsPopupMenu_Hide( byval hPopup as HWND )
     PM_HideLevel( hPopup )
 end sub
 
 
-sub CPopupMenu_CloseChain( byval hPopup as HWND )
+sub PsPopupMenu_CloseChain( byval hPopup as HWND )
     ' Programmatic close: SILENT, like every setter.
     PM_CloseChain( hPopup, 0, false )
 end sub
 
 
-function CPopupMenu_IsOpen( byval hPopup as HWND ) as boolean
+function PsPopupMenu_IsOpen( byval hPopup as HWND ) as boolean
     if hPopup = 0 then return false
     return (IsWindowVisible(hPopup) <> 0)
 end function
 
 
-function CPopupMenu_GetCurSel( byval hPopup as HWND ) as long
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_GetCurSel( byval hPopup as HWND ) as long
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return -1
     return pThis->nCurSel
 end function
 
 
-function CPopupMenu_SetCurSel( byval hPopup as HWND, byval idx as long ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_SetCurSel( byval hPopup as HWND, byval idx as long ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
     if (idx <> -1) andalso (pThis->IsValidItem(idx) = false) then return false
     if idx <> pThis->nCurSel then
@@ -1186,46 +1186,46 @@ function CPopupMenu_SetCurSel( byval hPopup as HWND, byval idx as long ) as bool
 end function
 
 
-function CPopupMenu_SelectFirst( byval hPopup as HWND ) as boolean
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+function PsPopupMenu_SelectFirst( byval hPopup as HWND ) as boolean
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then return false
-    return CPopupMenu_SetCurSel( hPopup, pThis->NextSelectable( -1, 1 ) )
+    return PsPopupMenu_SetCurSel( hPopup, pThis->NextSelectable( -1, 1 ) )
 end function
 
 
-sub CPopupMenu_SetNotifyWindow( byval hPopup as HWND, byval hNotifyWnd as HWND )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetNotifyWindow( byval hPopup as HWND, byval hNotifyWnd as HWND )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->hNotifyWnd = hNotifyWnd
 end sub
 
 
-sub CPopupMenu_SetSelectCallback( byval hPopup as HWND, byval usersub as PM_SelectCallbackSub )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetSelectCallback( byval hPopup as HWND, byval usersub as PM_SelectCallbackSub )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->SelectCallback = usersub
 end sub
 
 
-sub CPopupMenu_SetInitPopupCallback( byval hPopup as HWND, byval usersub as PM_InitPopupCallbackSub )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetInitPopupCallback( byval hPopup as HWND, byval usersub as PM_InitPopupCallbackSub )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->InitPopupCallback = usersub
 end sub
 
 
-sub CPopupMenu_SetPaintItemCallback( byval hPopup as HWND, byval usersub as PM_PaintItemCallbackSub )
-    dim as CPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
+sub PsPopupMenu_SetPaintItemCallback( byval hPopup as HWND, byval usersub as PM_PaintItemCallbackSub )
+    dim as PSPOPUPMENU ptr pThis = GetPopupMenuPointer(hPopup)
     if pThis = null then exit sub
     pThis->PaintItemCallback = usersub
 end sub
 
 
 ' ========================================================================================
-' The message-pump filter (see the contract in CPopupMenu.bi). Accepts any handle in
+' The message-pump filter (see the contract in PsPopupMenu.bi). Accepts any handle in
 ' the popup's chain; acts only while that chain is THE open chain.
 ' ========================================================================================
-function CPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr ) as boolean
+function PsPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr ) as boolean
     if pMsg = 0 then return false
     if gPM_OpenRoot = 0 then return false
     dim as HWND hRoot = PM_ResolveRootHwnd( hPopup )
@@ -1245,24 +1245,24 @@ function CPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr )
 
     case WM_KEYDOWN
         dim as HWND hInner = PM_InnermostHwnd( hRoot )
-        dim as CPOPUPMENU ptr pInner = GetPopupMenuPointer( hInner )
+        dim as PSPOPUPMENU ptr pInner = GetPopupMenuPointer( hInner )
         if pInner = null then return false
 
         select case pMsg->wParam
         case VK_DOWN
-            CPopupMenu_SetCurSel( hInner, pInner->NextSelectable( pInner->nCurSel, 1 ) )
+            PsPopupMenu_SetCurSel( hInner, pInner->NextSelectable( pInner->nCurSel, 1 ) )
         case VK_UP
             ' From "nothing selected", Up lands on the LAST selectable (wrap semantics).
             dim as long nFrom = pInner->nCurSel
             if nFrom = -1 then nFrom = pInner->itemCount
-            CPopupMenu_SetCurSel( hInner, pInner->NextSelectable( nFrom, -1 ) )
+            PsPopupMenu_SetCurSel( hInner, pInner->NextSelectable( nFrom, -1 ) )
         case VK_HOME
-            CPopupMenu_SetCurSel( hInner, pInner->NextSelectable( -1, 1 ) )
+            PsPopupMenu_SetCurSel( hInner, pInner->NextSelectable( -1, 1 ) )
         case VK_END
-            CPopupMenu_SetCurSel( hInner, pInner->NextSelectable( pInner->itemCount, -1 ) )
+            PsPopupMenu_SetCurSel( hInner, pInner->NextSelectable( pInner->itemCount, -1 ) )
         case VK_RIGHT
             ' Open the selected row's submenu. A row without one is a consumed no-op
-            ' here -- under a menubar, CMenuBar's filter pre-handles that case as
+            ' here -- under a menubar, PsMenuBar's filter pre-handles that case as
             ' "move to the next bar item" before delegating.
             dim as long idx = pInner->nCurSel
             if pInner->IsValidItem(idx) then
@@ -1273,7 +1273,7 @@ function CPopupMenu_FilterMessage( byval hPopup as HWND, byval pMsg as MSG ptr )
             end if
         case VK_LEFT
             ' Close the innermost submenu (its parent keeps the highlight). At the
-            ' root this is a consumed no-op -- CMenuBar pre-handles it.
+            ' root this is a consumed no-op -- PsMenuBar pre-handles it.
             if hInner <> hRoot then PM_HideLevel( hInner )
         case VK_RETURN
             dim as long idx = pInner->nCurSel

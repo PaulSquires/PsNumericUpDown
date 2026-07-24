@@ -1,4 +1,4 @@
-# CNumericUpDown
+# PsNumericUpDown
 
 An owner-drawn numeric up/down control — a spinner — for FreeBASIC Win32 applications: a
 rounded frame holding a `−` button, an editable numeric field and a `+` button, separated by
@@ -11,7 +11,7 @@ PgUp/PgDn and the mouse wheel all step it, and everything it draws is a colour y
 There is no system control underneath the chrome, so nothing about its appearance depends on
 the visual style the user happens to be running.
 
-The field in the middle is a real editing control — a `CTextBox` in numeric mode, whose own
+The field in the middle is a real editing control — a `PsTextBox` in numeric mode, whose own
 child is a RichEdit. Typing, selection, the clipboard, paste validation, undo and the
 right-click menu all come from there rather than being reimplemented. That is what makes this
 control cheap to use, and it is what gives it the two obligations in the next section: three
@@ -24,9 +24,9 @@ label goes beside it, positioned by you.
 
 ## What it looks like
 
-![The CNumericUpDown demo](CNumericUpDown.png)
+![The PsNumericUpDown demo](PsNumericUpDown.png)
 
-Seven rows: integers, two decimals with a 0.25 step, custom colours, a host-painted one sitting at its maximum so `+` paints disabled, a fully disabled one, a read-only one that still steps from its buttons, and a plain `CTextBox` at the bottom that exists to prove Tab reaches past the spinner and comes back. The value field is a `CTextBox` in numeric mode, so focus lives two levels down — `GetFocus() = hCtrl` is never true.
+Seven rows: integers, two decimals with a 0.25 step, custom colours, a host-painted one sitting at its maximum so `+` paints disabled, a fully disabled one, a read-only one that still steps from its buttons, and a plain `PsTextBox` at the bottom that exists to prove Tab reaches past the spinner and comes back. The value field is a `PsTextBox` in numeric mode, so focus lives two levels down — `GetFocus() = hCtrl` is never true.
 
 ---
 
@@ -36,19 +36,19 @@ Seven rows: integers, two decimals with a 0.25 step, custom colours, a host-pain
 
 | File | Purpose |
 |---|---|
-| `CNumericUpDown.bi` | Declarations — types, callbacks, constants, function prototypes |
-| `CNumericUpDown.inc` | Implementation |
-| `CTextBox.bi` | The editing control used as the value field |
-| `CTextBox.inc` | Its implementation |
-| `CPopupMenu.bi` | The value field's right-click menu |
-| `CPopupMenu.inc` | Its implementation |
-| `CBufferPaint.bi` | The flicker-free drawing surface everything paints through |
-| `CBufferPaint.inc` | Its implementation |
+| `PsNumericUpDown.bi` | Declarations — types, callbacks, constants, function prototypes |
+| `PsNumericUpDown.inc` | Implementation |
+| `PsTextBox.bi` | The editing control used as the value field |
+| `PsTextBox.inc` | Its implementation |
+| `PsPopupMenu.bi` | The value field's right-click menu |
+| `PsPopupMenu.inc` | Its implementation |
+| `PsBufferPaint.bi` | The flicker-free drawing surface everything paints through |
+| `PsBufferPaint.inc` | Its implementation |
 
-An application that already hosts `CTextBox` or `CPopupMenu` has those files once already —
+An application that already hosts `PsTextBox` or `PsPopupMenu` has those files once already —
 they are the same files, and `#include once` means nothing is duplicated.
 
-**AfxNova is required.** The control is built on `CWindow`, `CTextBox` uses
+**AfxNova is required.** The control is built on `CWindow`, `PsTextBox` uses
 `AfxNova\AfxRichEdit.inc`, and `CBufferPaint` draws through `AfxNova\CGdiPlus.inc`. Sources
 include AfxNova relative to the workspace root (`#include once "AfxNova\CWindow.inc"`), so
 builds need the workspace root on the include path:
@@ -61,10 +61,10 @@ fbc64.exe -i "C:\dev" main.bas
 included bottom-up:
 
 ```freebasic
-#include once "CBufferPaint.inc"
-#include once "CPopupMenu.inc"
-#include once "CTextBox.inc"
-#include once "CNumericUpDown.inc"
+#include once "PsBufferPaint.inc"
+#include once "PsPopupMenu.inc"
+#include once "PsTextBox.inc"
+#include once "PsNumericUpDown.inc"
 ```
 
 **GDI+ must be running before the first repaint and must outlive the last one.** The control
@@ -77,7 +77,7 @@ AfxGdipShutdown( gdipToken )
 ```
 
 `AfxGdipShutdown` must come after every window is destroyed, because each repaint builds and
-tears down a `CBufferPaint`.
+tears down a `PsBufferPaint`.
 
 **Never name an identifier `ok`.** GDI+ defines `Ok = 0` as a `Status` enum value in namespace
 `AfxNova`, and hosts customarily say `using AfxNova`. An existing variable, parameter or
@@ -86,8 +86,8 @@ function called `ok` becomes a duplicate definition the moment you adopt these f
 
 ### The pump call is mandatory
 
-**`CNumericUpDown_FilterMessage` is not optional.** The value field carries `CTextBox`'s
-built-in Cut / Copy / Paste / Select All right-click menu, which is a `CPopupMenu` and
+**`PsNumericUpDown_FilterMessage` is not optional.** The value field carries `PsTextBox`'s
+built-in Cut / Copy / Paste / Select All right-click menu, which is a `PsPopupMenu` and
 therefore not modal: its keyboard navigation and its dismissal on an outside click both live in
 a message filter.
 
@@ -95,7 +95,7 @@ a message filter.
 do while GetMessage( @uMsg, null, 0, 0 )
     if uMsg.message = WM_QUIT then exit do
 
-    if CNumericUpDown_FilterMessage( @uMsg ) then continue do
+    if PsNumericUpDown_FilterMessage( @uMsg ) then continue do
 
     TranslateMessage @uMsg
     DispatchMessage @uMsg
@@ -104,12 +104,12 @@ loop
 
 Leave it out and the context menu still opens and still paints, but it cannot be driven from
 the keyboard and it never closes when the user clicks elsewhere. The function forwards to
-`CTextBox_FilterMessage`, so an application already calling that one is covered either way and
+`PsTextBox_FilterMessage`, so an application already calling that one is covered either way and
 calling both is harmless.
 
 ### Tab navigation needs nothing from you
 
-The control is focusable, and **Tab works without `IsDialogMessage` in your pump.** `CTextBox`
+The control is focusable, and **Tab works without `IsDialogMessage` in your pump.** `PsTextBox`
 handles `VK_TAB` itself, walking `GetAncestor( GA_ROOT )` and `GetNextDlgTabItem` to move the
 focus on. A host that does run `IsDialogMessage` is fine too — the two do not fight.
 
@@ -123,25 +123,25 @@ through the extra nesting level this control adds. Do not clear it.
 
 ```freebasic
 ' Create it. The control is created zero-sized and hidden.
-dim as HWND hSpin = CNumericUpDown_Create( hWndParent, IDC_MYFORM_LINEHEIGHT )
-CNumericUpDown_SetFont( hSpin, ghFont(GUIFONT_10) )
+dim as HWND hSpin = PsNumericUpDown_Create( hWndParent, IDC_MYFORM_LINEHEIGHT )
+PsNumericUpDown_SetFont( hSpin, ghFont(GUIFONT_10) )
 
 ' Be told when the user changes the value.
-CNumericUpDown_SetValueChangedCallback( hSpin, @MySpin_ValueChanged )
+PsNumericUpDown_SetValueChangedCallback( hSpin, @MySpin_ValueChanged )
 
 ' Shape the value. Every one of these is silent — none fires the callback above.
 ' Set the decimal places and the range BEFORE the value: both of them rewrite
 ' whatever is already there.
-CNumericUpDown_SetDecimalPlaces( hSpin, 2 )
-CNumericUpDown_SetRange( hSpin, 0.5, 3.0 )
-CNumericUpDown_SetIncrement( hSpin, 0.25 )        ' buttons, arrows, one wheel notch
-CNumericUpDown_SetLargeIncrement( hSpin, 1.0 )    ' PgUp / PgDn
-CNumericUpDown_SetValue( hSpin, 1.5 )
+PsNumericUpDown_SetDecimalPlaces( hSpin, 2 )
+PsNumericUpDown_SetRange( hSpin, 0.5, 3.0 )
+PsNumericUpDown_SetIncrement( hSpin, 0.25 )        ' buttons, arrows, one wheel notch
+PsNumericUpDown_SetLargeIncrement( hSpin, 1.0 )    ' PgUp / PgDn
+PsNumericUpDown_SetValue( hSpin, 1.5 )
 
 ' Ask how big it wants to be, then place it. GetIdealSize is valid immediately,
 ' before the control has ever been sized.
 dim as long iw, ih
-CNumericUpDown_GetIdealSize( hSpin, iw, ih )
+PsNumericUpDown_GetIdealSize( hSpin, iw, ih )
 SetWindowPos( hSpin, 0, x, y, iw, ih, SWP_NOZORDER )
 
 ShowWindow( hSpin, SW_SHOW )
@@ -152,12 +152,12 @@ And the callback:
 ```freebasic
 sub MySpin_ValueChanged( byval hCtrl as HWND, byval nValue as double )
     ' Fired only for user action. The value is already clamped, snapped and
-    ' displayed, so CNumericUpDown_GetValue( hCtrl ) = nValue.
+    ' displayed, so PsNumericUpDown_GetValue( hCtrl ) = nValue.
     gConfig.LineHeight = nValue
 end sub
 ```
 
-That, plus the `CNumericUpDown_FilterMessage` line in your pump, is the whole minimum.
+That, plus the `PsNumericUpDown_FilterMessage` line in your pump, is the whole minimum.
 Everything below is refinement.
 
 ---
@@ -166,48 +166,48 @@ Everything below is refinement.
 
 ### The handle is a real HWND
 
-`CNumericUpDown_Create` returns an ordinary window handle, and every `CNumericUpDown_*`
+`PsNumericUpDown_Create` returns an ordinary window handle, and every `PsNumericUpDown_*`
 function takes it. It is not an opaque type, so you can treat the control as the window it is —
 `SetWindowPos` to place and size it, `ShowWindow` to show it, `GetDlgItem` to find it by the
 `CtrlID` you passed at creation.
 
 ### It is created zero-sized and hidden
 
-`CNumericUpDown_Create` gives the container the styles `WS_CHILD`, `WS_CLIPSIBLINGS` and
+`PsNumericUpDown_Create` gives the container the styles `WS_CHILD`, `WS_CLIPSIBLINGS` and
 `WS_CLIPCHILDREN`, plus the extended style `WS_EX_CONTROLPARENT`. `WS_VISIBLE` is deliberately
 absent, so a newly created control shows nothing until you size it and call `ShowWindow`. That
 lets you build and configure a control before it is ever seen.
 
 The container itself is **not** a tabstop; the RichEdit inside it is.
 
-### The value field is an embedded CTextBox
+### The value field is an embedded PsTextBox
 
 The window tree is three deep:
 
 ```
-CNumericUpDown container      WS_EX_CONTROLPARENT
-  +-- CTextBox                borderless: this control owns all the chrome
+PsNumericUpDown container      WS_EX_CONTROLPARENT
+  +-- PsTextBox                borderless: this control owns all the chrome
         +-- RichEdit50W       WS_TABSTOP — the real focus target
 ```
 
-The `CTextBox` is created borderless, in numeric mode, centred, with its margins taken from the
+The `PsTextBox` is created borderless, in numeric mode, centred, with its margins taken from the
 value padding and with "an empty buffer reads as zero" turned on.
-`CNumericUpDown_GetTextBoxHandle` is the escape hatch: every `CTextBox_*` setter applies to it —
+`PsNumericUpDown_GetTextBoxHandle` is the escape hatch: every `PsTextBox_*` setter applies to it —
 cue banner, text limit, context-menu theming, and so on.
 
-**Three `CTextBox` setters are owned by this control and must not be set behind its back:**
+**Three `PsTextBox` setters are owned by this control and must not be set behind its back:**
 
 | Setter | Why not |
 |---|---|
-| `CTextBox_SetValue` | Use `CNumericUpDown_SetValue`, or the committed value and the buttons' at-a-limit state go stale |
-| `CTextBox_SetDecimalPlaces` | Use `CNumericUpDown_SetDecimalPlaces`, for the same reason |
-| `CTextBox_SetBorderWidth` | Anything nonzero draws a second frame inside this control's own |
+| `PsTextBox_SetValue` | Use `PsNumericUpDown_SetValue`, or the committed value and the buttons' at-a-limit state go stale |
+| `PsTextBox_SetDecimalPlaces` | Use `PsNumericUpDown_SetDecimalPlaces`, for the same reason |
+| `PsTextBox_SetBorderWidth` | Anything nonzero draws a second frame inside this control's own |
 
 ### Focus lives two levels down
 
 **`GetFocus() = hCtrl` is never true.** Keyboard focus sits on the RichEdit, two windows below
 the handle you hold, so the obvious test always answers FALSE. Use
-`CNumericUpDown_HasFocus( hCtrl )`, which asks the right window.
+`PsNumericUpDown_HasFocus( hCtrl )`, which asks the right window.
 
 `SetFocus( hCtrl )` does work and means what you expect — the container hands the focus straight
 down to the RichEdit rather than swallowing it.
@@ -247,7 +247,7 @@ inset by the border width would round its own corners a pixel inside the frame's
 sliver of the base fill showing through whenever a hovered button's colour differs from it.
 
 **`rcValue` alone is inset, and only vertically, by exactly the border thickness.** It is the
-one rect a child window covers: the `CTextBox` sits exactly on it and paints its own background
+one rect a child window covers: the `PsTextBox` sits exactly on it and paints its own background
 there, so a full-height value cell would put the child on top of the frame's top and bottom rows
 and the border would be interrupted across the middle of the control.
 
@@ -260,12 +260,12 @@ six properties in a row costs one layout pass, not six.
 
 Laying out takes no device context. Nothing in the cells is measured — every number is either
 authored or derived from the client rect, and the number on screen is measured by the RichEdit.
-`CNumericUpDown_GetIdealSize` is the one place this control measures anything, and it opens its
+`PsNumericUpDown_GetIdealSize` is the one place this control measures anything, and it opens its
 own DC to do it.
 
 ### The ideal size is measured from the range
 
-`CNumericUpDown_GetIdealSize` formats **both ends of the range** at the current decimal places,
+`PsNumericUpDown_GetIdealSize` formats **both ends of the range** at the current decimal places,
 measures them in the current font, takes the wider, and adds the padding, both buttons, both
 dividers and the border:
 
@@ -339,7 +339,7 @@ clamped, snapped and reformatted, which is what turns `5.` into `5.00`.
 Because every programmatic setter is silent, it is safe to call one from inside your own change
 handler without recursing. This follows Win32's own `BM_SETCHECK` / `BN_CLICKED` split.
 
-`CNumericUpDown_GetValue` returns the **committed** value. While the user is mid-typing it still
+`PsNumericUpDown_GetValue` returns the **committed** value. While the user is mid-typing it still
 reports the last committed number, and so does the buttons' at-a-limit appearance — they still
 *step* correctly from what was typed.
 
@@ -367,7 +367,7 @@ zero disables repeating entirely: one click, one step.
 Sub-notch deltas accumulate, so a slow precision-touchpad swipe is not truncated away to
 nothing. `SPI_GETWHEELSCROLLLINES` is deliberately **not** consulted — "how many lines does one
 notch scroll" is a question about scrolling a view, and this is a value, not a view. One notch
-is one increment, and you control the feel through `CNumericUpDown_SetIncrement`.
+is one increment, and you control the feel through `PsNumericUpDown_SetIncrement`.
 
 Wheel messages go to the *focused* window, so most of them arrive at the RichEdit. The container
 catches the other case: Windows' "scroll inactive windows" setting, on by default, delivers the
@@ -377,19 +377,19 @@ wheel to whatever is under the cursor, which is the container when the pointer i
 
 They are different statements, and both are available.
 
-`CNumericUpDown_SetEnabled( hCtrl, false )` calls `EnableWindow` on **both** the container and
-the `CTextBox`. A disabled window receives no mouse input at all, and disabling only the
+`PsNumericUpDown_SetEnabled( hCtrl, false )` calls `EnableWindow` on **both** the container and
+the `PsTextBox`. A disabled window receives no mouse input at all, and disabling only the
 container would leave the field itself enabled, where a programmatic `SetFocus` could still drop
 a caret into a control that looks dead. If you call `EnableWindow` on the control directly, the
 control notices and greys itself, so the two routes cannot disagree.
 
-`CNumericUpDown_SetReadOnly( hCtrl, true )` stops **typing only**. The buttons, the arrow keys,
+`PsNumericUpDown_SetReadOnly( hCtrl, true )` stops **typing only**. The buttons, the arrow keys,
 PgUp/PgDn and the wheel all keep working. It says "you may not type an arbitrary number here",
 which is not the same as "this control is inert".
 
 ### Lifetime
 
-The control frees itself when its window is destroyed, taking the `CTextBox` with it. It owns no
+The control frees itself when its window is destroyed, taking the `PsTextBox` with it. It owns no
 host resources — in particular the font is caller-owned and is never deleted. Destroy the parent
 and you are done.
 
@@ -399,11 +399,11 @@ and you are done.
 
 Firm properties of the control, not settings:
 
-- **The pump call is mandatory.** Without `CNumericUpDown_FilterMessage`, the value field's
+- **The pump call is mandatory.** Without `PsNumericUpDown_FilterMessage`, the value field's
   right-click menu has no keyboard navigation and never closes on an outside click.
 - **`GetFocus() = hCtrl` is never true.** Focus lives on the RichEdit two levels down; use
-  `CNumericUpDown_HasFocus`.
-- **`WS_EX_CONTROLPARENT` on the container is load-bearing.** `CTextBox`'s own `VK_TAB` walk
+  `PsNumericUpDown_HasFocus`.
+- **`WS_EX_CONTROLPARENT` on the container is load-bearing.** `PsTextBox`'s own `VK_TAB` walk
   only sees through a container that declares itself one, so clearing it breaks tabbing into and
   out of the value field.
 - **The range clamps; it never wraps.** A button at a limit paints disabled, and auto-repeat
@@ -420,7 +420,7 @@ Firm properties of the control, not settings:
 - **Home and End are not claimed.** They move the caret to the start and end of the text.
   Stealing them for min/max would break ordinary editing in a field the user can type into.
 - **The value cell is reported by `HitTest` but never acted on.** That area is covered by the
-  `CTextBox` child, which receives its own mouse messages and never routes them to the
+  `PsTextBox` child, which receives its own mouse messages and never routes them to the
   container, so in practice only `NUD_PART_MINUS` and `NUD_PART_PLUS` are reachable through a
   real mouse message.
 - **No tooltip support.** There is no tooltip callback and no tooltip window is created. If you
@@ -447,12 +447,12 @@ Firm properties of the control, not settings:
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_Create( hWndParent, CtrlID ) as HWND` | Creates the control as a child of `hWndParent` and returns its window handle. `CtrlID` becomes the window's `GWLP_ID`, so `GetDlgItem` finds it. Created zero-sized and hidden — size it with `CNumericUpDown_GetIdealSize`, place it with `SetWindowPos`, then `ShowWindow`. |
-| `CNumericUpDown_HasFocus( hCtrl ) as boolean` | TRUE while the value field owns the keyboard focus. **Use this, not `GetFocus`** — focus sits on the RichEdit two levels down, so `GetFocus() = hCtrl` is always FALSE. |
-| `CNumericUpDown_GetEnabled( hCtrl ) as boolean` | The control's enabled state. |
-| `CNumericUpDown_SetEnabled( hCtrl, isEnabled )` | Enables or disables through `EnableWindow`, on the container **and** on the embedded `CTextBox`, so input really stops and no `SetFocus` can sneak in. Disabling clears any hover and cancels a live press and its repeat. Does not change the value. |
-| `CNumericUpDown_Refresh( hCtrl )` | Marks the layout stale, requests a repaint with background erase, and re-places the child. Rarely needed — every setter does this for you. |
-| `CNumericUpDown_FilterMessage( pMsg as MSG ptr ) as boolean` | **Call this in your message pump.** Returns TRUE when the message was consumed by the value field's context menu, in which case skip `TranslateMessage`/`DispatchMessage` for it. Forwards to `CTextBox_FilterMessage`, so calling both is harmless. |
+| `PsNumericUpDown_Create( hWndParent, CtrlID ) as HWND` | Creates the control as a child of `hWndParent` and returns its window handle. `CtrlID` becomes the window's `GWLP_ID`, so `GetDlgItem` finds it. Created zero-sized and hidden — size it with `PsNumericUpDown_GetIdealSize`, place it with `SetWindowPos`, then `ShowWindow`. |
+| `PsNumericUpDown_HasFocus( hCtrl ) as boolean` | TRUE while the value field owns the keyboard focus. **Use this, not `GetFocus`** — focus sits on the RichEdit two levels down, so `GetFocus() = hCtrl` is always FALSE. |
+| `PsNumericUpDown_GetEnabled( hCtrl ) as boolean` | The control's enabled state. |
+| `PsNumericUpDown_SetEnabled( hCtrl, isEnabled )` | Enables or disables through `EnableWindow`, on the container **and** on the embedded `PsTextBox`, so input really stops and no `SetFocus` can sneak in. Disabling clears any hover and cancels a live press and its repeat. Does not change the value. |
+| `PsNumericUpDown_Refresh( hCtrl )` | Marks the layout stale, requests a repaint with background erase, and re-places the child. Rarely needed — every setter does this for you. |
+| `PsNumericUpDown_FilterMessage( pMsg as MSG ptr ) as boolean` | **Call this in your message pump.** Returns TRUE when the message was consumed by the value field's context menu, in which case skip `TranslateMessage`/`DispatchMessage` for it. Forwards to `PsTextBox_FilterMessage`, so calling both is harmless. |
 
 ### Value and range
 
@@ -460,12 +460,12 @@ Every setter here is **silent** — none fires the change callback.
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_GetValue( hCtrl ) as double` | The **committed** value. While the user is mid-typing this is still the last committed number. |
-| `CNumericUpDown_SetValue( hCtrl, nValue )` | Snaps to the decimal grid, clamps into the range, displays it and records it. What you set is what `GetValue` returns and what is on screen. |
-| `CNumericUpDown_GetRange( hCtrl, byref nMin, byref nMax )` | The current range. |
-| `CNumericUpDown_SetRange( hCtrl, nMin, nMax )` | Sets the range. **An inverted pair is swapped, not rejected** — the alternative is a control whose clamp can never be satisfied and that pins to the minimum on every step. Re-clamps the current value, silently. |
-| `CNumericUpDown_GetDecimalPlaces( hCtrl ) as long` | Digits after the decimal point; `0` means integers only. |
-| `CNumericUpDown_SetDecimalPlaces( hCtrl, nPlaces )` | Sets the grid the value snaps to and the format it displays in. A negative count is floored at 0. Re-snaps the current value onto the new grid, silently — `16.25` at 2 places becomes `16` at 0. Reaches the embedded `CTextBox` too, which is what makes the field **refuse a typed decimal separator outright at 0 places**. |
+| `PsNumericUpDown_GetValue( hCtrl ) as double` | The **committed** value. While the user is mid-typing this is still the last committed number. |
+| `PsNumericUpDown_SetValue( hCtrl, nValue )` | Snaps to the decimal grid, clamps into the range, displays it and records it. What you set is what `GetValue` returns and what is on screen. |
+| `PsNumericUpDown_GetRange( hCtrl, byref nMin, byref nMax )` | The current range. |
+| `PsNumericUpDown_SetRange( hCtrl, nMin, nMax )` | Sets the range. **An inverted pair is swapped, not rejected** — the alternative is a control whose clamp can never be satisfied and that pins to the minimum on every step. Re-clamps the current value, silently. |
+| `PsNumericUpDown_GetDecimalPlaces( hCtrl ) as long` | Digits after the decimal point; `0` means integers only. |
+| `PsNumericUpDown_SetDecimalPlaces( hCtrl, nPlaces )` | Sets the grid the value snaps to and the format it displays in. A negative count is floored at 0. Re-snaps the current value onto the new grid, silently — `16.25` at 2 places becomes `16` at 0. Reaches the embedded `PsTextBox` too, which is what makes the field **refuse a typed decimal separator outright at 0 places**. |
 
 Set the decimal places and the range **before** the value: each of them rewrites whatever is
 already there.
@@ -474,24 +474,24 @@ already there.
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_GetIncrement( hCtrl ) as double` | The step used by the buttons, the Up/Down arrows and one wheel notch. Default 1. |
-| `CNumericUpDown_SetIncrement( hCtrl, nIncrement )` | Sets it. **Takes the magnitude** — a negative increment is stored as its absolute value, so `−` always goes down. |
-| `CNumericUpDown_GetLargeIncrement( hCtrl ) as double` | The step used by PgUp and PgDn. Defaults to ten times the increment default. |
-| `CNumericUpDown_SetLargeIncrement( hCtrl, nIncrement )` | Sets it; also takes the magnitude. |
-| `CNumericUpDown_StepUp( hCtrl )` | Adds one increment to whatever is in the field, snapped and clamped. The programmatic door to exactly what the `+` button does — **minus the notification**. |
-| `CNumericUpDown_StepDown( hCtrl )` | The same, downwards. Also silent. |
-| `CNumericUpDown_GetAutoRepeat( hCtrl, byref nDelayMs, byref nIntervalMs )` | The hold-to-repeat timings, in milliseconds. Defaults 400 and 60. |
-| `CNumericUpDown_SetAutoRepeat( hCtrl, nDelayMs, nIntervalMs )` | Sets them. **Either value at or below zero disables repeating** (one click, one step) and stops any repeat already running. Repeating also stops on its own the moment the value reaches a limit. |
+| `PsNumericUpDown_GetIncrement( hCtrl ) as double` | The step used by the buttons, the Up/Down arrows and one wheel notch. Default 1. |
+| `PsNumericUpDown_SetIncrement( hCtrl, nIncrement )` | Sets it. **Takes the magnitude** — a negative increment is stored as its absolute value, so `−` always goes down. |
+| `PsNumericUpDown_GetLargeIncrement( hCtrl ) as double` | The step used by PgUp and PgDn. Defaults to ten times the increment default. |
+| `PsNumericUpDown_SetLargeIncrement( hCtrl, nIncrement )` | Sets it; also takes the magnitude. |
+| `PsNumericUpDown_StepUp( hCtrl )` | Adds one increment to whatever is in the field, snapped and clamped. The programmatic door to exactly what the `+` button does — **minus the notification**. |
+| `PsNumericUpDown_StepDown( hCtrl )` | The same, downwards. Also silent. |
+| `PsNumericUpDown_GetAutoRepeat( hCtrl, byref nDelayMs, byref nIntervalMs )` | The hold-to-repeat timings, in milliseconds. Defaults 400 and 60. |
+| `PsNumericUpDown_SetAutoRepeat( hCtrl, nDelayMs, nIntervalMs )` | Sets them. **Either value at or below zero disables repeating** (one click, one step) and stops any repeat already running. Repeating also stops on its own the moment the value reaches a limit. |
 
 ### The value field
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_GetTextBoxHandle( hCtrl ) as HWND` | The embedded `CTextBox`, so any `CTextBox_*` setter can be applied to it — cue banner, text limit, context-menu theming. **Do not call `CTextBox_SetValue`, `CTextBox_SetDecimalPlaces` or `CTextBox_SetBorderWidth` on it**: the first two go stale against this control's committed value, and the third draws a second frame inside this one's. |
-| `CNumericUpDown_GetReadOnly( hCtrl ) as boolean` | TRUE when typing is blocked. |
-| `CNumericUpDown_SetReadOnly( hCtrl, bReadOnly )` | Blocks **typing only**. The buttons, the arrow keys, PgUp/PgDn and the wheel keep working. For a genuinely inert control use `CNumericUpDown_SetEnabled`. |
-| `CNumericUpDown_GetFont( hCtrl ) as HFONT` | The font the value is drawn in. |
-| `CNumericUpDown_SetFont( hCtrl, hFont )` | Hands the font to the `CTextBox` and re-lays-out. **Caller-owned** — the control converts nothing and deletes nothing, so you keep ownership of the `HFONT` and must free it yourself. This font is also what `GetIdealSize` measures in; with none set it measures in `DEFAULT_GUI_FONT`. |
+| `PsNumericUpDown_GetTextBoxHandle( hCtrl ) as HWND` | The embedded `PsTextBox`, so any `PsTextBox_*` setter can be applied to it — cue banner, text limit, context-menu theming. **Do not call `PsTextBox_SetValue`, `PsTextBox_SetDecimalPlaces` or `PsTextBox_SetBorderWidth` on it**: the first two go stale against this control's committed value, and the third draws a second frame inside this one's. |
+| `PsNumericUpDown_GetReadOnly( hCtrl ) as boolean` | TRUE when typing is blocked. |
+| `PsNumericUpDown_SetReadOnly( hCtrl, bReadOnly )` | Blocks **typing only**. The buttons, the arrow keys, PgUp/PgDn and the wheel keep working. For a genuinely inert control use `PsNumericUpDown_SetEnabled`. |
+| `PsNumericUpDown_GetFont( hCtrl ) as HFONT` | The font the value is drawn in. |
+| `PsNumericUpDown_SetFont( hCtrl, hFont )` | Hands the font to the `PsTextBox` and re-lays-out. **Caller-owned** — the control converts nothing and deletes nothing, so you keep ownership of the `HFONT` and must free it yourself. This font is also what `GetIdealSize` measures in; with none set it measures in `DEFAULT_GUI_FONT`. |
 
 ### Geometry and layout
 
@@ -500,54 +500,54 @@ a repaint.
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_GetButtonWidth( hCtrl ) as long` | The width of each of the two button cells. |
-| `CNumericUpDown_SetButtonWidth( hCtrl, nWidth )` | Sets it; clamped to a minimum of 0. Both buttons share one width. |
-| `CNumericUpDown_GetValuePadding( hCtrl, byref nLeft, byref nRight, byref nVert )` | The text margins inside the value cell, and the vertical padding. |
-| `CNumericUpDown_SetValuePadding( hCtrl, nLeft, nRight, nVert )` | Each clamped to a minimum of 0. `nLeft`/`nRight` are real text margins, pushed into the field. **`nVert` is used only by `GetIdealSize`**, to decide the height around one line of text — it insets nothing. |
-| `CNumericUpDown_GetCornerRadius( hCtrl ) as long` | The frame's corner radius. |
-| `CNumericUpDown_SetCornerRadius( hCtrl, nRadius )` | Sets it; clamped to a minimum of 0, where **0 gives square corners**. |
-| `CNumericUpDown_GetBorderThickness( hCtrl ) as long` | The frame outline's thickness. |
-| `CNumericUpDown_SetBorderThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 means no frame at all**. This value also insets the value cell vertically, so changing it moves the child. Do not DPI-scale it. |
-| `CNumericUpDown_GetDividerThickness( hCtrl ) as long` | The hairline between each button and the value cell. |
-| `CNumericUpDown_SetDividerThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 draws no dividers** — and, being zero-width, takes no space either, since the cells and dividers tile the client width exactly. Do not DPI-scale it. |
-| `CNumericUpDown_GetGlyphSize( hCtrl, byref nLength, byref nThickness )` | The bar of the `−` (and each bar of the `+`), and its stroke weight. |
-| `CNumericUpDown_SetGlyphSize( hCtrl, nLength, nThickness )` | Sets both; **each floored at 1**, so a degenerate glyph becomes a 1×1 dot rather than nothing at all. Unlike the two hairlines, this thickness **should** be DPI-scaled — it is an icon stroke. |
-| `CNumericUpDown_GetIdealSize( hCtrl, byref nWidth, byref nHeight )` | The size that fits the widest value the range can produce at the current decimal places, in the current font, plus the padding, both buttons, both dividers and the border. Measures both ends of the range. Opens its own DC, so it is **valid before the control has ever been sized**. |
-| `CNumericUpDown_GetFrameRect( hCtrl, byref rc ) as boolean` | The frame — the whole client area. |
-| `CNumericUpDown_GetMinusRect( hCtrl, byref rc ) as boolean` | The `−` button cell. Spans the full client height: the cells are not deflated by the border. |
-| `CNumericUpDown_GetValueRect( hCtrl, byref rc ) as boolean` | The value cell — where the `CTextBox` child sits exactly. The one rect inset by the border, and only vertically. |
-| `CNumericUpDown_GetPlusRect( hCtrl, byref rc ) as boolean` | The `+` button cell. |
-| `CNumericUpDown_HitTest( hCtrl, pt ) as long` | Which `NUD_PART_*` is under a point in **client** coordinates, or `NUD_PART_NONE` outside the cells. `NUD_PART_VALUE` is reported for completeness; the control never acts on it. |
+| `PsNumericUpDown_GetButtonWidth( hCtrl ) as long` | The width of each of the two button cells. |
+| `PsNumericUpDown_SetButtonWidth( hCtrl, nWidth )` | Sets it; clamped to a minimum of 0. Both buttons share one width. |
+| `PsNumericUpDown_GetValuePadding( hCtrl, byref nLeft, byref nRight, byref nVert )` | The text margins inside the value cell, and the vertical padding. |
+| `PsNumericUpDown_SetValuePadding( hCtrl, nLeft, nRight, nVert )` | Each clamped to a minimum of 0. `nLeft`/`nRight` are real text margins, pushed into the field. **`nVert` is used only by `GetIdealSize`**, to decide the height around one line of text — it insets nothing. |
+| `PsNumericUpDown_GetCornerRadius( hCtrl ) as long` | The frame's corner radius. |
+| `PsNumericUpDown_SetCornerRadius( hCtrl, nRadius )` | Sets it; clamped to a minimum of 0, where **0 gives square corners**. |
+| `PsNumericUpDown_GetBorderThickness( hCtrl ) as long` | The frame outline's thickness. |
+| `PsNumericUpDown_SetBorderThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 means no frame at all**. This value also insets the value cell vertically, so changing it moves the child. Do not DPI-scale it. |
+| `PsNumericUpDown_GetDividerThickness( hCtrl ) as long` | The hairline between each button and the value cell. |
+| `PsNumericUpDown_SetDividerThickness( hCtrl, nThickness )` | Sets it; clamped to a minimum of 0, where **0 draws no dividers** — and, being zero-width, takes no space either, since the cells and dividers tile the client width exactly. Do not DPI-scale it. |
+| `PsNumericUpDown_GetGlyphSize( hCtrl, byref nLength, byref nThickness )` | The bar of the `−` (and each bar of the `+`), and its stroke weight. |
+| `PsNumericUpDown_SetGlyphSize( hCtrl, nLength, nThickness )` | Sets both; **each floored at 1**, so a degenerate glyph becomes a 1×1 dot rather than nothing at all. Unlike the two hairlines, this thickness **should** be DPI-scaled — it is an icon stroke. |
+| `PsNumericUpDown_GetIdealSize( hCtrl, byref nWidth, byref nHeight )` | The size that fits the widest value the range can produce at the current decimal places, in the current font, plus the padding, both buttons, both dividers and the border. Measures both ends of the range. Opens its own DC, so it is **valid before the control has ever been sized**. |
+| `PsNumericUpDown_GetFrameRect( hCtrl, byref rc ) as boolean` | The frame — the whole client area. |
+| `PsNumericUpDown_GetMinusRect( hCtrl, byref rc ) as boolean` | The `−` button cell. Spans the full client height: the cells are not deflated by the border. |
+| `PsNumericUpDown_GetValueRect( hCtrl, byref rc ) as boolean` | The value cell — where the `PsTextBox` child sits exactly. The one rect inset by the border, and only vertically. |
+| `PsNumericUpDown_GetPlusRect( hCtrl, byref rc ) as boolean` | The `+` button cell. |
+| `PsNumericUpDown_HitTest( hCtrl, pt ) as long` | Which `NUD_PART_*` is under a point in **client** coordinates, or `NUD_PART_NONE` outside the cells. `NUD_PART_VALUE` is reported for completeness; the control never acts on it. |
 
 The four rect queries force any pending layout first, so their results are always current. Each
 returns FALSE — leaving `rc` empty — when the control has no client area yet, which is the case
-between `CNumericUpDown_Create` and the first `SetWindowPos`.
+between `PsNumericUpDown_Create` and the first `SetWindowPos`.
 
 ### Appearance
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_GetColors( hCtrl, pColors as CNUMERICUPDOWN_COLORS ptr )` | Fills your struct with the control's current colours. |
-| `CNumericUpDown_SetColors( hCtrl, pColors as CNUMERICUPDOWN_COLORS ptr )` | Copies the whole struct in, pushes the value cell's colours into the embedded `CTextBox`, and repaints. |
+| `PsNumericUpDown_GetColors( hCtrl, pColors as PSNUMERICUPDOWN_COLORS ptr )` | Fills your struct with the control's current colours. |
+| `PsNumericUpDown_SetColors( hCtrl, pColors as PSNUMERICUPDOWN_COLORS ptr )` | Copies the whole struct in, pushes the value cell's colours into the embedded `PsTextBox`, and repaints. |
 
 To change one colour, read-modify-write:
 
 ```freebasic
-dim as CNUMERICUPDOWN_COLORS clrs
-CNumericUpDown_GetColors( hSpin, @clrs )
+dim as PSNUMERICUPDOWN_COLORS clrs
+PsNumericUpDown_GetColors( hSpin, @clrs )
 clrs.ButtonBackColorHot     = BGR( 62,140, 90)
 clrs.ButtonBackColorPressed = BGR( 42,100, 64)
 clrs.FocusBorderColor       = BGR(120,200,150)
-CNumericUpDown_SetColors( hSpin, @clrs )
+PsNumericUpDown_SetColors( hSpin, @clrs )
 ```
 
 ### Callback registration
 
 | Function | Description |
 |---|---|
-| `CNumericUpDown_SetPaintCallback( hCtrl, usersub )` | Installs a renderer that draws the frame, the cells, the dividers and the glyphs **instead of** the built-in painter. Repaints. It never draws the number. |
-| `CNumericUpDown_SetMessageCallback( hCtrl, userfunc )` | Installs an observer for the container's mouse and timer messages **and** the value field's relayed key, wheel and focus messages. |
-| `CNumericUpDown_SetValueChangedCallback( hCtrl, usersub )` | Installs the handler told when the **user** changes the value. |
+| `PsNumericUpDown_SetPaintCallback( hCtrl, usersub )` | Installs a renderer that draws the frame, the cells, the dividers and the glyphs **instead of** the built-in painter. Repaints. It never draws the number. |
+| `PsNumericUpDown_SetMessageCallback( hCtrl, userfunc )` | Installs an observer for the container's mouse and timer messages **and** the value field's relayed key, wheel and focus messages. |
+| `PsNumericUpDown_SetValueChangedCallback( hCtrl, usersub )` | Installs the handler told when the **user** changes the value. |
 
 All three are optional and independent.
 
@@ -555,9 +555,9 @@ All three are optional and independent.
 
 ## Colors
 
-The colour surface is one flat struct, `CNUMERICUPDOWN_COLORS`, with eighteen `COLORREF` fields.
+The colour surface is one flat struct, `PSNUMERICUPDOWN_COLORS`, with eighteen `COLORREF` fields.
 Every field ships with a usable dark-theme default, so a control you never call
-`CNumericUpDown_SetColors` on still looks right.
+`PsNumericUpDown_SetColors` on still looks right.
 
 | Field | Paints |
 |---|---|
@@ -580,7 +580,7 @@ Every field ships with a usable dark-theme default, so a control you never call
 | `GlyphColorPressed` | The bars, pressed |
 | `GlyphColorDisabled` | The bars, disabled or at the limit |
 
-The four `Value*` fields are handed to the embedded `CTextBox` rather than painted by this
+The four `Value*` fields are handed to the embedded `PsTextBox` rather than painted by this
 control — the RichEdit draws the number. They live in this struct so that you set every colour
 of the control in one place. They are re-applied whenever the enabled state changes.
 
@@ -624,7 +624,7 @@ The paint order is load-bearing, and it is what keeps the corners round:
 | 4 | The dividers and the glyphs, as filled **rectangles** — an antialiased one-pixel axis-aligned rule comes out grey and blurry, so antialiasing is reserved for curves |
 | 5 | The frame **outline** last, over everything |
 
-All of it goes through `CBufferPaint`, which renders geometry with GDI+, so the frame's corners
+All of it goes through `PsBufferPaint`, which renders geometry with GDI+, so the frame's corners
 are antialiased. A paint callback gets that same buffer and inherits the same primitives.
 
 ---
@@ -638,18 +638,18 @@ type NUD_ValueChangedCallbackSub as sub( byval hCtrl as HWND, byval nValue as do
 ```
 
 The **user** changed the value. Fires after the value has been clamped, snapped and displayed,
-so `CNumericUpDown_GetValue( hCtrl )` already equals `nValue`.
+so `PsNumericUpDown_GetValue( hCtrl )` already equals `nValue`.
 
 See [Who notifies, and when](#who-notifies-and-when) for the timing table. In short: immediately
 for a button, an auto-repeat tick, an arrow key, PgUp/PgDn and the wheel; on commit only for
 typing; never for a programmatic setter.
 
-That last part is what makes it safe to call `CNumericUpDown_SetValue` from inside this handler.
+That last part is what makes it safe to call `PsNumericUpDown_SetValue` from inside this handler.
 
 ### Paint
 
 ```freebasic
-type NUD_PaintCallbackSub as sub( byval p as CNUMERICUPDOWN_PAINTINFO ptr )
+type NUD_PaintCallbackSub as sub( byval p as PSNUMERICUPDOWN_PAINTINFO ptr )
 ```
 
 Draws the frame, the cells, the dividers and the glyphs **instead of** the built-in painter.
@@ -661,17 +661,17 @@ that only wants to add something on top does not have to repaint the background.
 **It does not draw the number.** The RichEdit paints that over `rcValue` afterwards, whatever
 you drew there.
 
-`CNUMERICUPDOWN_PAINTINFO` carries everything you need:
+`PSNUMERICUPDOWN_PAINTINFO` carries everything you need:
 
 | Field | Meaning |
 |---|---|
 | `hCtrl` | The control, so the callback can query it |
-| `b` | The control's `CBufferPaint` for this repaint (borrowed, not owned) |
+| `b` | The control's `PsBufferPaint` for this repaint (borrowed, not owned) |
 | `rcClient` | The whole client area |
 | `rcFrame` | Where the rounded border is stroked |
 | `rcMinus` | The left button cell |
 | `rcDiv1` | The hairline between the `−` cell and the value cell |
-| `rcValue` | The value cell — the `CTextBox` child sits exactly here |
+| `rcValue` | The value cell — the `PsTextBox` child sits exactly here |
 | `rcDiv2` | The hairline between the value cell and the `+` cell |
 | `rcPlus` | The right button cell |
 | `rcMinusBar` | The `−` glyph |
@@ -686,7 +686,7 @@ you drew there.
 | `nValue` | The current value, already clamped and snapped |
 
 Every rect is precomputed. Use them as given — in particular, never re-derive a glyph bar from
-its cell by repeating the centring arithmetic, because `CNumericUpDown_SetGlyphSize` can change
+its cell by repeating the centring arithmetic, because `PsNumericUpDown_SetGlyphSize` can change
 it underneath you.
 
 `bAtMin` / `bAtMax` are how a callback gets the at-a-limit greying without having to know
@@ -703,13 +703,13 @@ anything about the range.
 ### Message
 
 ```freebasic
-type NUD_MessageCallbackFunc as function( byval m as CNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
+type NUD_MessageCallbackFunc as function( byval m as PSNUMERICUPDOWN_MESSAGEINFO ptr ) as boolean
 ```
 
 Observes messages as they arrive. Return TRUE to suppress the control's own handling of that
 message, FALSE to let it proceed.
 
-`CNUMERICUPDOWN_MESSAGEINFO` carries four fields:
+`PSNUMERICUPDOWN_MESSAGEINFO` carries four fields:
 
 | Field | Meaning |
 |---|---|
@@ -721,7 +721,7 @@ message, FALSE to let it proceed.
 **Two sources feed this one callback.** The container's own messages — the mouse over the two
 buttons, the hover and repeat timers, `WM_ENABLE`, the right button, a hover wheel — arrive
 directly. The value field's key, wheel and focus messages arrive relayed from the embedded
-`CTextBox`, with `hCtrl` rewritten to *this* control. So you see one message stream for the
+`PsTextBox`, with `hCtrl` rewritten to *this* control. So you see one message stream for the
 whole control and never have to know a RichEdit is in there.
 
 **Your return value is ignored for two messages:**
@@ -764,11 +764,11 @@ end enum
 | `CNUD_DEFAULT_INCREMENT` | 1.0 | Default increment; the large increment defaults to ten times this |
 | `CNUD_DEFAULT_DECIMALPLACES` | 0 | Default decimal places — integers |
 
-The range default is deliberately wide: a host that never calls `CNumericUpDown_SetRange` gets a
+The range default is deliberately wide: a host that never calls `PsNumericUpDown_SetRange` gets a
 control that does not silently clamp, while the range machinery is always present so the buttons
 can grey out at a limit.
 
-`IDT_CNUMERICUPDOWN_HOTTRACK`, `IDT_CNUMERICUPDOWN_REPEAT` and `CNUMERICUPDOWN_HOTTRACK_MS` are
+`IDT_CNUMERICUPDOWN_HOTTRACK`, `IDT_CNUMERICUPDOWN_REPEAT` and `PSNUMERICUPDOWN_HOTTRACK_MS` are
 the control's own timer ids and its hover-poll period (100 ms). Timer ids are per-window, so
 every instance shares them and you need reserve nothing.
 
@@ -776,15 +776,15 @@ every instance shares them and you need reserve nothing.
 
 ## Related controls
 
-**`CTextBox`** is the value field. Everything about typing in this control — character
+**`PsTextBox`** is the value field. Everything about typing in this control — character
 filtering, paste validation, selection, undo, the text limit, the cue banner, the right-click
-menu — is `CTextBox` behaviour, so its documentation is where to look when the question is about
-editing rather than about spinning. `CNumericUpDown_GetTextBoxHandle` gives you the handle to
+menu — is `PsTextBox` behaviour, so its documentation is where to look when the question is about
+editing rather than about spinning. `PsNumericUpDown_GetTextBoxHandle` gives you the handle to
 apply its setters to, minus the three this control owns.
 
-**`CPopupMenu`** is what `CTextBox` uses for that right-click menu. You never talk to it directly
-here, but it is the reason `CNumericUpDown_FilterMessage` has to be in your pump.
+**`PsPopupMenu`** is what `PsTextBox` uses for that right-click menu. You never talk to it directly
+here, but it is the reason `PsNumericUpDown_FilterMessage` has to be in your pump.
 
-**`CBufferPaint`** is the drawing surface this control — and any paint callback you write —
+**`PsBufferPaint`** is the drawing surface this control — and any paint callback you write —
 renders through. Its primitives (`PaintRoundRect`, `PaintRoundOutline`, `PaintRect`,
 `SetBackColor`, `SetPenColor`) are what a callback has to work with.

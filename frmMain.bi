@@ -1,4 +1,4 @@
-'    CNumericUpDown - reusable owner-drawn numeric up/down control
+'    PsNumericUpDown - reusable owner-drawn numeric up/down control
 '    Copyright (C) 2016-2026 Paul Squires, PlanetSquires Software
 '
 '    This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,6 @@
 
 #define IDC_FRMMAIN_SPIN_FIRST   1000
 #define IDC_FRMMAIN_SPIN_TEST    1098   ' the throwaway control the self-test measures
-#define IDC_FRMMAIN_TEXTBOX      1099   ' a plain CTextBox, to prove Tab walks the nesting
+#define IDC_FRMMAIN_TEXTBOX      1099   ' a plain PsTextBox, to prove Tab walks the nesting
 
 declare function frmMain_Show( byval hWndParent as HWND ) as LRESULT

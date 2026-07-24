@@ -1,28 +1,28 @@
 ''
-''  CNumericUpDown.inc  --  owner-drawn numeric up/down (spinner) with an editable value
+''  PsNumericUpDown.inc  --  owner-drawn numeric up/down (spinner) with an editable value
 ''
 
-#include once "CNumericUpDown.bi"
+#include once "PsNumericUpDown.bi"
 
 
-function GetNumericUpDownPointer( byval hCtrl as HWND ) as CNUMERICUPDOWN ptr
+function GetNumericUpDownPointer( byval hCtrl as HWND ) as PSNUMERICUPDOWN ptr
     dim pWindow as CWindow ptr = AfxCWindowPtr(hCtrl)
     if pWindow = 0 then return 0
-    return cast( CNUMERICUPDOWN ptr, pWindow->UserData(0) )
+    return cast( PSNUMERICUPDOWN ptr, pWindow->UserData(0) )
 end function
 
 
-' Forward declarations: the Create routine installs these on the embedded CTextBox, and the
+' Forward declarations: the Create routine installs these on the embedded PsTextBox, and the
 ' WndProc and they call each other.
-declare function CNumericUpDown_WndProc( byval hwnd as HWND, byval uMsg as UINT, byval wParam as WPARAM, byval lParam as LPARAM ) as LRESULT
-declare sub      NUD_SyncChild( byval pNud as CNUMERICUPDOWN ptr )
-declare function NUD_StepBy( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND, byval delta as double ) as boolean
-declare function NUD_HandleWheel( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND, byval nDelta as long ) as boolean
+declare function PsNumericUpDown_WndProc( byval hwnd as HWND, byval uMsg as UINT, byval wParam as WPARAM, byval lParam as LPARAM ) as LRESULT
+declare sub      NUD_SyncChild( byval pNud as PSNUMERICUPDOWN ptr )
+declare function NUD_StepBy( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND, byval delta as double ) as boolean
+declare function NUD_HandleWheel( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND, byval nDelta as long ) as boolean
 
 
 ' ========================================================================================
-' Format a value the way the control displays it. Deliberately NOT calling CTextBox's own
-' private CTextBox_FormatNumeric: everything here is textually included into one module, so
+' Format a value the way the control displays it. Deliberately NOT calling PsTextBox's own
+' private PsTextBox_FormatNumeric: everything here is textually included into one module, so
 ' that private helper happens to be reachable, but reaching for it would couple this control
 ' to an implementation detail of a VENDORED file that is synced from elsewhere.
 ' ========================================================================================
@@ -43,7 +43,7 @@ end function
 ' value would be wrong, and they differ by more than 0.25 so they are not).
 ' ========================================================================================
 private function NUD_ValuesDiffer( _
-            byval pNud as CNUMERICUPDOWN ptr, _
+            byval pNud as PSNUMERICUPDOWN ptr, _
             byval a as double, _
             byval b as double _
             ) as boolean
@@ -60,7 +60,7 @@ end function
 ' do not (see NUD_MessageCallbackFunc).
 ' ========================================================================================
 private function NUD_CallMessage( _
-            byval pNud   as CNUMERICUPDOWN ptr, _
+            byval pNud   as PSNUMERICUPDOWN ptr, _
             byval hCtrl  as HWND, _
             byval uMsg   as UINT, _
             byval wParam as WPARAM, _
@@ -70,7 +70,7 @@ private function NUD_CallMessage( _
     if pNud = 0 then return false
     if pNud->MessageCallback = 0 then return false
 
-    dim as CNUMERICUPDOWN_MESSAGEINFO m
+    dim as PSNUMERICUPDOWN_MESSAGEINFO m
     m.hCtrl  = hCtrl
     m.uMsg   = uMsg
     m.wParam = wParam
@@ -80,22 +80,22 @@ end function
 
 
 ' ========================================================================================
-' Push the value cell's colors into the CTextBox for the control's current enabled state.
+' Push the value cell's colors into the PsTextBox for the control's current enabled state.
 '
 ' The RichEdit draws the number, so these two colors have to live on the child -- but they
 ' are authored in OUR color struct, because a host should set every color of the control in
 ' one place. This is the one routine that bridges the two.
 ' ========================================================================================
-private sub NUD_ApplyStateColors( byval pNud as CNUMERICUPDOWN ptr )
+private sub NUD_ApplyStateColors( byval pNud as PSNUMERICUPDOWN ptr )
     if pNud = 0 then exit sub
     if pNud->hTextBox = 0 then exit sub
 
     if pNud->isEnabled then
-        CTextBox_SetBackColor( pNud->hTextBox, pNud->colors.ValueBackColor )
-        CTextBox_SetForeColor( pNud->hTextBox, pNud->colors.ValueForeColor )
+        PsTextBox_SetBackColor( pNud->hTextBox, pNud->colors.ValueBackColor )
+        PsTextBox_SetForeColor( pNud->hTextBox, pNud->colors.ValueForeColor )
     else
-        CTextBox_SetBackColor( pNud->hTextBox, pNud->colors.ValueBackColorDisabled )
-        CTextBox_SetForeColor( pNud->hTextBox, pNud->colors.ValueForeColorDisabled )
+        PsTextBox_SetBackColor( pNud->hTextBox, pNud->colors.ValueBackColorDisabled )
+        PsTextBox_SetForeColor( pNud->hTextBox, pNud->colors.ValueForeColorDisabled )
     end if
 end sub
 
@@ -105,20 +105,20 @@ end sub
 '
 ' THE ORDER MATTERS. nValue is updated first so that anything the writes below trigger --
 ' a repaint deciding whether a button is at its limit, a host querying us from a callback --
-' already sees the new value. CTextBox_SetValue is silent (a programmatic setter), so this
+' already sees the new value. PsTextBox_SetValue is silent (a programmatic setter), so this
 ' never notifies; the caller decides whether a change is worth reporting.
 ' ========================================================================================
-private sub NUD_DisplayValue( byval pNud as CNUMERICUPDOWN ptr, byval nValue as double )
+private sub NUD_DisplayValue( byval pNud as PSNUMERICUPDOWN ptr, byval nValue as double )
     if pNud = 0 then exit sub
 
     pNud->nValue = nValue
     if pNud->hTextBox then
         ' No alignment work here. The centring is set ONCE at Create and survives every
-        ' subsequent write -- CTextBox's own harness asserts exactly that. An earlier version
+        ' subsequent write -- PsTextBox's own harness asserts exactly that. An earlier version
         ' of this routine re-stamped it after each value change, which was both unnecessary
         ' and (as it turned out) ineffective: it was sending EM_SETPARAFORMAT itself, which
         ' TM_PLAINTEXT silently refuses.
-        CTextBox_SetValue( pNud->hTextBox, nValue )
+        PsTextBox_SetValue( pNud->hTextBox, nValue )
     end if
     ' The buttons' at-a-limit appearance is derived from the value, so a repaint is not
     ' optional here even though the number itself is drawn by the child.
@@ -129,15 +129,15 @@ end sub
 ' ========================================================================================
 ' What is in the field RIGHT NOW, normalised.
 '
-' Read from the CTextBox rather than from nValue, because the user may have typed something
+' Read from the PsTextBox rather than from nValue, because the user may have typed something
 ' that has not been committed yet -- and stepping from what is on screen is what a user
 ' expects when they type 50 and then click "+". Out-of-range typing is clamped here, so a
 ' step always starts from a legal value.
 ' ========================================================================================
-private function NUD_CurrentValue( byval pNud as CNUMERICUPDOWN ptr ) as double
+private function NUD_CurrentValue( byval pNud as PSNUMERICUPDOWN ptr ) as double
     if pNud = 0 then return 0
     if pNud->hTextBox = 0 then return pNud->nValue
-    return pNud->ClampToRange( pNud->SnapToPlaces( CTextBox_GetValue( pNud->hTextBox ) ) )
+    return pNud->ClampToRange( pNud->SnapToPlaces( PsTextBox_GetValue( pNud->hTextBox ) ) )
 end function
 
 
@@ -149,12 +149,12 @@ end function
 ' user is mid-typing, the buttons reflect the last committed value rather than the digits on
 ' screen. They still step correctly from what was typed (see NUD_CurrentValue).
 ' ========================================================================================
-private function NUD_AtMin( byval pNud as CNUMERICUPDOWN ptr ) as boolean
+private function NUD_AtMin( byval pNud as PSNUMERICUPDOWN ptr ) as boolean
     if pNud = 0 then return false
     return ( NUD_ValuesDiffer( pNud, pNud->nValue, pNud->nMin ) = false ) orelse (pNud->nValue < pNud->nMin)
 end function
 
-private function NUD_AtMax( byval pNud as CNUMERICUPDOWN ptr ) as boolean
+private function NUD_AtMax( byval pNud as PSNUMERICUPDOWN ptr ) as boolean
     if pNud = 0 then return false
     return ( NUD_ValuesDiffer( pNud, pNud->nValue, pNud->nMax ) = false ) orelse (pNud->nValue > pNud->nMax)
 end function
@@ -172,7 +172,7 @@ end function
 ' The display is refreshed either way, which is also what normalises "5." to "5.00".
 ' ========================================================================================
 private function NUD_StepBy( _
-            byval pNud  as CNUMERICUPDOWN ptr, _
+            byval pNud  as PSNUMERICUPDOWN ptr, _
             byval hCtrl as HWND, _
             byval delta as double _
             ) as boolean
@@ -199,11 +199,11 @@ end function
 ' ========================================================================================
 ' Commit whatever the user typed: clamp it, snap it, reformat it, and report it once.
 '
-' Reached from ENTER and from focus loss. By the time CTextBox's FocusCallback runs, its
+' Reached from ENTER and from focus loss. By the time PsTextBox's FocusCallback runs, its
 ' numeric mode has already rewritten "5." as "5.00" -- but it knows nothing about our range,
 ' so the clamp is ours and has to happen here.
 ' ========================================================================================
-private sub NUD_CommitTypedValue( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND )
+private sub NUD_CommitTypedValue( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND )
     if pNud = 0 then exit sub
 
     dim as double nOld = pNud->nValue
@@ -226,12 +226,12 @@ end sub
 ' under one 120 notch and truncating each one would ignore a slow swipe entirely.
 '
 ' SPI_GETWHEELSCROLLLINES is deliberately NOT consulted, which is where this parts company
-' with CVScrollBar/CHScrollBar: "how many LINES does one notch scroll" is a question about
+' with PsVScrollBar/PsHScrollBar: "how many LINES does one notch scroll" is a question about
 ' scrolling a view, and this is a value, not a view. One notch = one increment, and the host
 ' controls the feel through SetIncrement.
 ' ========================================================================================
 private function NUD_HandleWheel( _
-            byval pNud   as CNUMERICUPDOWN ptr, _
+            byval pNud   as PSNUMERICUPDOWN ptr, _
             byval hCtrl  as HWND, _
             byval nDelta as long _
             ) as boolean
@@ -254,10 +254,10 @@ end function
 ' Which part is under a CLIENT-coordinate point?
 '
 ' The value cell is reported for completeness, but the control never acts on it: that area
-' is covered by the CTextBox child, which gets its own mouse messages and never routes them
+' is covered by the PsTextBox child, which gets its own mouse messages and never routes them
 ' here. So in practice only MINUS and PLUS are ever reachable through a real mouse message.
 ' ========================================================================================
-private function NUD_HitTestPart( byval pNud as CNUMERICUPDOWN ptr, byval pt as POINT ) as long
+private function NUD_HitTestPart( byval pNud as PSNUMERICUPDOWN ptr, byval pt as POINT ) as long
     if pNud = 0 then return NUD_PART_NONE
     if pNud->bLayoutDirty then pNud->LayoutControl()
 
@@ -274,14 +274,14 @@ end function
 ' rather than adding a second one. So the first tick arrives after the delay and all the
 ' rest after the interval.
 ' ========================================================================================
-private sub NUD_StartRepeat( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND )
+private sub NUD_StartRepeat( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND )
     if pNud = 0 then exit sub
     if (pNud->nRepeatDelayMs <= 0) orelse (pNud->nRepeatIntervalMs <= 0) then exit sub
     SetTimer( hCtrl, IDT_CNUMERICUPDOWN_REPEAT, pNud->nRepeatDelayMs, NULL )
     pNud->repeatTimerOn = true
 end sub
 
-private sub NUD_StopRepeat( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND )
+private sub NUD_StopRepeat( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND )
     if pNud = 0 then exit sub
     if pNud->repeatTimerOn then
         KillTimer( hCtrl, IDT_CNUMERICUPDOWN_REPEAT )
@@ -294,7 +294,7 @@ end sub
 ' Clear the hover state and stop the hover poll timer. Repaints only if the state actually
 ' changes, so this is cheap to call repeatedly.
 ' ========================================================================================
-private sub NUD_ClearHot( byval pNud as CNUMERICUPDOWN ptr, byval hCtrl as HWND )
+private sub NUD_ClearHot( byval pNud as PSNUMERICUPDOWN ptr, byval hCtrl as HWND )
     if pNud = 0 then exit sub
     if pNud->hotTimerOn then
         KillTimer( hCtrl, IDT_CNUMERICUPDOWN_HOTTRACK )
@@ -308,7 +308,7 @@ end sub
 
 
 ' ========================================================================================
-' Keep the CTextBox child sitting exactly on rcValue.
+' Keep the PsTextBox child sitting exactly on rcValue.
 '
 ' Guarded by a comparison so it is a no-op in steady state: this runs from WM_PAINT as well
 ' as WM_SIZE, and an unconditional SetWindowPos from inside a paint would invite a repaint
@@ -318,7 +318,7 @@ end sub
 ' hidden rather than handed a degenerate rect, because a zero-width RichEdit is a different
 ' kind of problem from an absent one.
 ' ========================================================================================
-private sub NUD_SyncChild( byval pNud as CNUMERICUPDOWN ptr )
+private sub NUD_SyncChild( byval pNud as PSNUMERICUPDOWN ptr )
     if pNud = 0 then exit sub
     if pNud->hTextBox = 0 then exit sub
     if pNud->bLayoutDirty then pNud->LayoutControl()
@@ -345,7 +345,7 @@ end sub
 ' ========================================================================================
 ' Draw the frame, the two button cells, the dividers and the two glyphs.
 '
-' IT NEVER DRAWS THE NUMBER. The RichEdit inside the CTextBox paints that, over rcValue,
+' IT NEVER DRAWS THE NUMBER. The RichEdit inside the PsTextBox paints that, over rcValue,
 ' after we are done -- and because the container is WS_CLIPCHILDREN, the child's rect is
 ' excluded from our DC anyway, so anything drawn there would be discarded rather than
 ' fighting for the pixels.
@@ -366,13 +366,13 @@ end sub
 '   5. the frame OUTLINE last, over everything -- PaintRoundOutline, not
 '      PaintRoundBorderRect, because a filled round rect here would erase steps 2-4.
 '
-' Curvature is a DIAMETER in this API (CBufferPaint halves it to a GDI+ radius internally),
+' Curvature is a DIAMETER in this API (PsBufferPaint halves it to a GDI+ radius internally),
 ' so nCornerRadius is doubled at every call site here.
 ' ========================================================================================
-private sub CNumericUpDown_RenderDefault( _
-            byval pNud as CNUMERICUPDOWN ptr, _
-            byval b    as CBufferPaint ptr, _
-            byval p    as CNUMERICUPDOWN_PAINTINFO ptr _
+private sub PsNumericUpDown_RenderDefault( _
+            byval pNud as PSNUMERICUPDOWN ptr, _
+            byval b    as PsBufferPaint ptr, _
+            byval p    as PSNUMERICUPDOWN_PAINTINFO ptr _
             )
 
     if (pNud = 0) orelse (b = 0) orelse (p = 0) then exit sub
@@ -471,8 +471,8 @@ end sub
 ' ========================================================================================
 ' Process WM_PAINT.
 ' ========================================================================================
-private function CNumericUpDown_OnPaint( byval hwnd as HWND ) as LRESULT
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hwnd)
+private function PsNumericUpDown_OnPaint( byval hwnd as HWND ) as LRESULT
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hwnd)
     if pNud = null then return 0
 
     ' Consume any pending layout before painting -- this is what makes layout lazy -- and
@@ -480,12 +480,12 @@ private function CNumericUpDown_OnPaint( byval hwnd as HWND ) as LRESULT
     if pNud->bLayoutDirty then pNud->LayoutControl()
     NUD_SyncChild( pNud )
 
-    dim as CBufferPaint b
+    dim as PsBufferPaint b
     b.BeginDoubleBuffer(hwnd)
     b.SetBackColor( pNud->colors.BackColor )
     b.PaintClientRect()
 
-    dim p as CNUMERICUPDOWN_PAINTINFO
+    dim p as PSNUMERICUPDOWN_PAINTINFO
     p.hCtrl       = hwnd
     p.b           = @b
     GetClientRect( hwnd, @p.rcClient )
@@ -514,7 +514,7 @@ private function CNumericUpDown_OnPaint( byval hwnd as HWND ) as LRESULT
     if pNud->PaintCallback then
         pNud->PaintCallback( @p )
     else
-        CNumericUpDown_RenderDefault( pNud, @b, @p )
+        PsNumericUpDown_RenderDefault( pNud, @b, @p )
     end if
 
     b.EndDoubleBuffer()
@@ -523,21 +523,21 @@ end function
 
 
 ' ========================================================================================
-' THE THREE HOOKS INTO THE EMBEDDED CTextBox.
+' THE THREE HOOKS INTO THE EMBEDDED PsTextBox.
 '
-' CTextBox reports events against ITS OWN handle, so each of these starts by walking up one
+' PsTextBox reports events against ITS OWN handle, so each of these starts by walking up one
 ' level: GetParent(hTextBox) is this control. That is the whole mapping -- there is no
 ' registry and no back-pointer to keep in sync.
 ' ========================================================================================
 
 ' The value field gained or lost keyboard focus.
 '
-' FOCUS LOSS IS WHAT COMMITS A TYPED VALUE, and by the time this runs CTextBox's numeric mode
+' FOCUS LOSS IS WHAT COMMITS A TYPED VALUE, and by the time this runs PsTextBox's numeric mode
 ' has already reformatted the buffer ("5." -> "5.00"). It knows nothing about our range,
 ' though, so the clamp happens here.
 private sub NUD_OnTextBoxFocus( byval hTextBox as HWND, byval bGotFocus as boolean )
     dim as HWND hCtrl = GetParent( hTextBox )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
     if pNud = 0 then exit sub
 
     pNud->isFocused = bGotFocus
@@ -547,11 +547,11 @@ private sub NUD_OnTextBoxFocus( byval hTextBox as HWND, byval bGotFocus as boole
 end sub
 
 
-' ENTER in the value field. CTextBox swallows the keystroke itself (no newline, no beep) and
+' ENTER in the value field. PsTextBox swallows the keystroke itself (no newline, no beep) and
 ' reports it here; committing is the natural meaning of ENTER in a spinner.
 private sub NUD_OnTextBoxEnter( byval hTextBox as HWND )
     dim as HWND hCtrl = GetParent( hTextBox )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
     if pNud = 0 then exit sub
 
     NUD_CommitTypedValue( pNud, hCtrl )
@@ -559,23 +559,23 @@ end sub
 
 
 ' Every key, wheel, mouse and focus message the RichEdit sees passes through here BEFORE
-' CTextBox acts on it. Two jobs:
+' PsTextBox acts on it. Two jobs:
 '
 '   1. RELAY it to our own host as if it had arrived at this control, so a host sees one
 '      message stream and never has to know a RichEdit is in there.
 '   2. CLAIM the four navigation keys and the wheel. They are free to take: a single-line
-'      RichEdit does nothing useful with Up/Down/PgUp/PgDn, and CTextBox only handles
+'      RichEdit does nothing useful with Up/Down/PgUp/PgDn, and PsTextBox only handles
 '      WM_MOUSEWHEEL in multiline mode.
 '
-' Returning TRUE makes CTextBox's subclass return 0 without calling the RichEdit, which is
+' Returning TRUE makes PsTextBox's subclass return 0 without calling the RichEdit, which is
 ' exactly "consumed". Home and End are deliberately NOT claimed -- they move the caret to the
 ' start and end of the text, and stealing them for min/max would break ordinary editing in a
 ' field the user can type into.
-private function NUD_OnTextBoxMessage( byval m as CTEXTBOX_MESSAGEINFO ptr ) as boolean
+private function NUD_OnTextBoxMessage( byval m as PSTEXTBOX_MESSAGEINFO ptr ) as boolean
     if m = 0 then return false
 
     dim as HWND hCtrl = GetParent( m->hTextBox )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hCtrl )
     if pNud = 0 then return false
 
     ' The host sees it first. WM_KILLFOCUS is relayed but NOT vetoable: it is what commits a
@@ -615,7 +615,7 @@ end function
 
 
 ' ========================================================================================
-' CNumericUpDown container window procedure.
+' PsNumericUpDown container window procedure.
 '
 ' It owns the chrome, the two buttons and the child's geometry. The value field's own
 ' messages never reach here -- they go to the RichEdit and come back through
@@ -636,23 +636,23 @@ end function
 ' arrive here, wherever the cursor has wandered to, so the repeat timer can never outlive the
 ' gesture. Every real spinner behaves this way.
 '
-' CS_DBLCLKS IS DELIBERATELY NOT SET, which is CToggle's and CIconPanel's call rather than
-' CSelectBar's: with it, the second of two rapid clicks arrives as WM_LBUTTONDBLCLK INSTEAD
+' CS_DBLCLKS IS DELIBERATELY NOT SET, which is PsToggle's and PsIconPanel's call rather than
+' PsSelectBar's: with it, the second of two rapid clicks arrives as WM_LBUTTONDBLCLK INSTEAD
 ' OF a second WM_LBUTTONDOWN, and a user double-clicking "+" to add two would get one.
 ' ========================================================================================
-function CNumericUpDown_WndProc( _
+function PsNumericUpDown_WndProc( _
             byval hwnd   as HWND, _
             byval uMsg   as UINT, _
             byval wParam as WPARAM, _
             byval lParam as LPARAM _
             ) as LRESULT
 
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hwnd )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer( hwnd )
 
     select case uMsg
 
     case WM_PAINT
-        return CNumericUpDown_OnPaint( hwnd )
+        return PsNumericUpDown_OnPaint( hwnd )
 
     case WM_ERASEBKGND
         ' Never erase: WM_PAINT fills the whole client through the double buffer, so a
@@ -671,7 +671,7 @@ function CNumericUpDown_WndProc( _
         ' container itself is not a tabstop and has nothing to do with focus, so hand it
         ' straight down rather than swallowing it.
         if pNud andalso pNud->hTextBox then
-            dim as HWND hEdit = CTextBox_GetRichEditHandle( pNud->hTextBox )
+            dim as HWND hEdit = PsTextBox_GetRichEditHandle( pNud->hTextBox )
             if hEdit then
                 SetFocus( hEdit )
                 return 0
@@ -743,7 +743,7 @@ function CNumericUpDown_WndProc( _
             ' Safety net: WM_MOUSELEAVE is not guaranteed to arrive when the mouse exits
             ' quickly (or onto the child in the middle), which would strand a button hot.
             if pNud->hotTimerOn = false then
-                SetTimer( hwnd, IDT_CNUMERICUPDOWN_HOTTRACK, CNUMERICUPDOWN_HOTTRACK_MS, NULL )
+                SetTimer( hwnd, IDT_CNUMERICUPDOWN_HOTTRACK, PSNUMERICUPDOWN_HOTTRACK_MS, NULL )
                 pNud->hotTimerOn = true
             end if
         end if
@@ -801,15 +801,15 @@ function CNumericUpDown_WndProc( _
         ' the frame lights up -- but WITHOUT selecting the text, which would leave the number
         ' highlighted after every click of "+". A Tab arrival still selects.
         '
-        ' Toggling the CTextBox flag around the SetFocus is safe (rather than a timing
-        ' gamble) because CTextBox applies select-on-focus synchronously inside its
+        ' Toggling the PsTextBox flag around the SetFocus is safe (rather than a timing
+        ' gamble) because PsTextBox applies select-on-focus synchronously inside its
         ' WM_SETFOCUS handler -- the whole effect is over before SetFocus returns.
         if pNud->hTextBox then
-            dim as HWND hEdit = CTextBox_GetRichEditHandle( pNud->hTextBox )
+            dim as HWND hEdit = PsTextBox_GetRichEditHandle( pNud->hTextBox )
             if hEdit then
-                CTextBox_SetSelectOnFocus( pNud->hTextBox, false )
+                PsTextBox_SetSelectOnFocus( pNud->hTextBox, false )
                 SetFocus( hEdit )
-                CTextBox_SetSelectOnFocus( pNud->hTextBox, true )
+                PsTextBox_SetSelectOnFocus( pNud->hTextBox, true )
             end if
         end if
 
@@ -865,7 +865,7 @@ function CNumericUpDown_WndProc( _
         end if
 
     case WM_RBUTTONDOWN, WM_RBUTTONUP
-        ' Reported, never acted on. The value field has its own context menu (CTextBox's);
+        ' Reported, never acted on. The value field has its own context menu (PsTextBox's);
         ' the buttons have none, and inventing one here is the host's business.
         if pNud then
             if NUD_CallMessage( pNud, hwnd, uMsg, wParam, lParam ) then return 0
@@ -873,7 +873,7 @@ function CNumericUpDown_WndProc( _
 
     case WM_ENABLE
         ' Keeps our own flag true to the window's real state, so a host that reaches for
-        ' EnableWindow directly instead of CNumericUpDown_SetEnabled still gets the greyed
+        ' EnableWindow directly instead of PsNumericUpDown_SetEnabled still gets the greyed
         ' rendering rather than a control that looks live but eats input.
         if pNud then
             pNud->isEnabled = (wParam <> 0)
@@ -901,7 +901,7 @@ function CNumericUpDown_WndProc( _
         end if
 
     case WM_NCDESTROY
-        ' Delete the stored control data. The CTextBox child destroys itself with its own
+        ' Delete the stored control data. The PsTextBox child destroys itself with its own
         ' window (it is our child, so it goes first); the font is caller-owned and is never
         ' deleted here.
         if pNud then delete(pNud)
@@ -920,25 +920,25 @@ end function
 
 
 ' ========================================================================================
-' CNumericUpDown_Create
+' PsNumericUpDown_Create
 ' ========================================================================================
-function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long ) as HWND
+function PsNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long ) as HWND
 
     dim pWindow as CWindow ptr = New CWindow
 
-    ' WS_EX_CONTROLPARENT is LOAD-BEARING, not decoration. CTextBox handles VK_TAB itself by
+    ' WS_EX_CONTROLPARENT is LOAD-BEARING, not decoration. PsTextBox handles VK_TAB itself by
     ' walking GetAncestor(GA_ROOT) + GetNextDlgTabItem, and that walk only sees through a
     ' container that declares itself one. Without it, tabbing into or out of the value field
     ' stops working the moment the textbox is nested inside this control.
     dim as HWND hCtrl = _
-            pWindow->Create( hWndParent, "", @CNumericUpDown_WndProc, _
+            pWindow->Create( hWndParent, "", @PsNumericUpDown_WndProc, _
             0, 0, 0, 0, WS_CHILD or WS_CLIPSIBLINGS or WS_CLIPCHILDREN, _
             WS_EX_CONTROLPARENT _
             )
 
     ' NOTE: CS_DBLCLKS is deliberately NOT enabled here -- see the WndProc header.
 
-    dim as CNUMERICUPDOWN ptr pNud = new CNUMERICUPDOWN
+    dim as PSNUMERICUPDOWN ptr pNud = new PSNUMERICUPDOWN
     pNud->hWin     = hCtrl
     pNud->idc_Ctrl = CtrlID
 
@@ -946,7 +946,7 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
     ' pixels and the caller scales (the family rule).
     '
     ' nBorderThick and nDividerThick are NOT scaled -- a hairline should stay a hairline,
-    ' CMenuBar's nSeparatorThickness rule. nGlyphThick IS scaled, and that asymmetry is
+    ' PsMenuBar's nSeparatorThickness rule. nGlyphThick IS scaled, and that asymmetry is
     ' deliberate: the border and divider are rules, while the glyph bars are the strokes of an
     ' icon, and scaling an icon's length but not its weight makes it thinner relative to
     ' itself on every step up in DPI. At 1.75x the unscaled version was 18 pixels long and 1
@@ -973,31 +973,31 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
 
     ' ---- the value field ----------------------------------------------------------------
     ' Borderless, because THIS control owns every pixel of chrome; numeric, because that is
-    ' the whole reason for embedding a CTextBox rather than drawing the number ourselves.
-    pNud->hTextBox = CTextBox_Create( hCtrl, CtrlID )
+    ' the whole reason for embedding a PsTextBox rather than drawing the number ourselves.
+    pNud->hTextBox = PsTextBox_Create( hCtrl, CtrlID )
     if pNud->hTextBox then
-        CTextBox_SetBorderWidth( pNud->hTextBox, 0 )
-        CTextBox_SetNumericMode( pNud->hTextBox, true )
-        CTextBox_SetDecimalPlaces( pNud->hTextBox, pNud->nDecimalPlaces )
+        PsTextBox_SetBorderWidth( pNud->hTextBox, 0 )
+        PsTextBox_SetNumericMode( pNud->hTextBox, true )
+        PsTextBox_SetDecimalPlaces( pNud->hTextBox, pNud->nDecimalPlaces )
         ' Never show an empty box: with a range there is no "no value" state to represent,
         ' so an empty buffer displays the formatted zero instead of the (unset) cue banner.
-        CTextBox_SetZeroWhenEmpty( pNud->hTextBox, true )
+        PsTextBox_SetZeroWhenEmpty( pNud->hTextBox, true )
         ' Tab in and the whole number is selected, so the first keystroke replaces it. A
         ' button click deliberately bypasses this -- see WM_LBUTTONDOWN.
-        CTextBox_SetSelectOnFocus( pNud->hTextBox, true )
-        CTextBox_SetMargins( pNud->hTextBox, pNud->nValuePadLeft, pNud->nValuePadRight )
-        ' Centred, which is the whole reason CTextBox grew an alignment setter. It is set
+        PsTextBox_SetSelectOnFocus( pNud->hTextBox, true )
+        PsTextBox_SetMargins( pNud->hTextBox, pNud->nValuePadLeft, pNud->nValuePadRight )
+        ' Centred, which is the whole reason PsTextBox grew an alignment setter. It is set
         ' HERE, while the buffer is still empty, and that timing is not incidental: applying
         ' alignment rewrites the buffer and discards the undo history, so a control that has
         ' been typed into pays for it. At Create there is nothing to pay.
-        CTextBox_SetTextAlign( pNud->hTextBox, TXT_ALIGN_CENTER )
+        PsTextBox_SetTextAlign( pNud->hTextBox, TXT_ALIGN_CENTER )
         NUD_ApplyStateColors( pNud )
 
-        CTextBox_SetFocusCallback( pNud->hTextBox, @NUD_OnTextBoxFocus )
-        CTextBox_SetEnterPressedCallback( pNud->hTextBox, @NUD_OnTextBoxEnter )
-        CTextBox_SetMessageCallback( pNud->hTextBox, @NUD_OnTextBoxMessage )
+        PsTextBox_SetFocusCallback( pNud->hTextBox, @NUD_OnTextBoxFocus )
+        PsTextBox_SetEnterPressedCallback( pNud->hTextBox, @NUD_OnTextBoxEnter )
+        PsTextBox_SetMessageCallback( pNud->hTextBox, @NUD_OnTextBoxMessage )
 
-        CTextBox_SetValue( pNud->hTextBox, pNud->nValue )
+        PsTextBox_SetValue( pNud->hTextBox, pNud->nValue )
         ShowWindow( pNud->hTextBox, SW_SHOW )
     end if
 
@@ -1006,38 +1006,38 @@ function CNumericUpDown_Create( byval hWndParent as HWND, byval CtrlID as long )
 end function
 
 
-function CNumericUpDown_GetTextBoxHandle( byval hCtrl as HWND ) as HWND
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetTextBoxHandle( byval hCtrl as HWND ) as HWND
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->hTextBox
 end function
 
 ' Focus sits on the RichEdit two levels down, so a plain GetFocus() = hCtrl is always false.
-function CNumericUpDown_HasFocus( byval hCtrl as HWND ) as boolean
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_HasFocus( byval hCtrl as HWND ) as boolean
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return false
     if pNud->hTextBox = 0 then return false
-    return CTextBox_HasFocus( pNud->hTextBox )
+    return PsTextBox_HasFocus( pNud->hTextBox )
 end function
 
 
 ' ========================================================================================
 ' Value.  Every setter here is SILENT -- see NUD_ValueChangedCallbackSub.
 ' ========================================================================================
-function CNumericUpDown_GetValue( byval hCtrl as HWND ) as double
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetValue( byval hCtrl as HWND ) as double
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nValue
 end function
 
-sub CNumericUpDown_SetValue( byval hCtrl as HWND, byval nValue as double )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetValue( byval hCtrl as HWND, byval nValue as double )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     NUD_DisplayValue( pNud, pNud->ClampToRange( pNud->SnapToPlaces( nValue ) ) )
 end sub
 
-sub CNumericUpDown_GetRange( byval hCtrl as HWND, byref nMin as double, byref nMax as double )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_GetRange( byval hCtrl as HWND, byref nMin as double, byref nMax as double )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then
         nMin = 0 : nMax = 0
         exit sub
@@ -1048,8 +1048,8 @@ end sub
 
 ' An inverted pair is swapped rather than rejected: the alternative is a control whose
 ' ClampToRange can never be satisfied, and every subsequent step would pin to nMin.
-sub CNumericUpDown_SetRange( byval hCtrl as HWND, byval nMin as double, byval nMax as double )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetRange( byval hCtrl as HWND, byval nMin as double, byval nMax as double )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
 
     if nMin > nMax then swap nMin, nMax
@@ -1059,100 +1059,100 @@ sub CNumericUpDown_SetRange( byval hCtrl as HWND, byval nMin as double, byval nM
     NUD_DisplayValue( pNud, pNud->ClampToRange( pNud->nValue ) )
 end sub
 
-function CNumericUpDown_GetIncrement( byval hCtrl as HWND ) as double
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetIncrement( byval hCtrl as HWND ) as double
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nIncrement
 end function
 
-sub CNumericUpDown_SetIncrement( byval hCtrl as HWND, byval nIncrement as double )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetIncrement( byval hCtrl as HWND, byval nIncrement as double )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->nIncrement = abs(nIncrement)
 end sub
 
-function CNumericUpDown_GetLargeIncrement( byval hCtrl as HWND ) as double
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetLargeIncrement( byval hCtrl as HWND ) as double
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nLargeIncrement
 end function
 
-sub CNumericUpDown_SetLargeIncrement( byval hCtrl as HWND, byval nIncrement as double )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetLargeIncrement( byval hCtrl as HWND, byval nIncrement as double )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->nLargeIncrement = abs(nIncrement)
 end sub
 
-function CNumericUpDown_GetDecimalPlaces( byval hCtrl as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetDecimalPlaces( byval hCtrl as HWND ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nDecimalPlaces
 end function
 
 ' Changing the grid re-snaps the current value onto it, so 16.25 at 2 places becomes 16 at 0.
-' The CTextBox is told too: it is what refuses a typed decimal separator at 0 places.
-sub CNumericUpDown_SetDecimalPlaces( byval hCtrl as HWND, byval nPlaces as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+' The PsTextBox is told too: it is what refuses a typed decimal separator at 0 places.
+sub PsNumericUpDown_SetDecimalPlaces( byval hCtrl as HWND, byval nPlaces as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nPlaces < 0 then nPlaces = 0
 
     pNud->nDecimalPlaces = nPlaces
-    if pNud->hTextBox then CTextBox_SetDecimalPlaces( pNud->hTextBox, nPlaces )
+    if pNud->hTextBox then PsTextBox_SetDecimalPlaces( pNud->hTextBox, nPlaces )
     NUD_DisplayValue( pNud, pNud->ClampToRange( pNud->SnapToPlaces( pNud->nValue ) ) )
 end sub
 
 ' The programmatic door to exactly what the buttons do -- minus the notification, because
 ' this is a programmatic setter (the family rule).
-sub CNumericUpDown_StepUp( byval hCtrl as HWND )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_StepUp( byval hCtrl as HWND )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     NUD_DisplayValue( pNud, pNud->ClampToRange( pNud->SnapToPlaces( NUD_CurrentValue(pNud) + pNud->nIncrement ) ) )
 end sub
 
-sub CNumericUpDown_StepDown( byval hCtrl as HWND )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_StepDown( byval hCtrl as HWND )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     NUD_DisplayValue( pNud, pNud->ClampToRange( pNud->SnapToPlaces( NUD_CurrentValue(pNud) - pNud->nIncrement ) ) )
 end sub
 
-function CNumericUpDown_GetReadOnly( byval hCtrl as HWND ) as boolean
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetReadOnly( byval hCtrl as HWND ) as boolean
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return false
     return pNud->bReadOnly
 end function
 
 ' Stops TYPING only. The buttons, the arrows and the wheel keep working -- "you may not type
 ' an arbitrary number here" is a different statement from "this control is inert".
-sub CNumericUpDown_SetReadOnly( byval hCtrl as HWND, byval bReadOnly as boolean )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetReadOnly( byval hCtrl as HWND, byval bReadOnly as boolean )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->bReadOnly = bReadOnly
-    if pNud->hTextBox then CTextBox_SetReadOnly( pNud->hTextBox, bReadOnly )
+    if pNud->hTextBox then PsTextBox_SetReadOnly( pNud->hTextBox, bReadOnly )
 end sub
 
 
 ' ========================================================================================
 ' State and behavior
 ' ========================================================================================
-function CNumericUpDown_GetEnabled( byval hCtrl as HWND ) as boolean
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetEnabled( byval hCtrl as HWND ) as boolean
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return false
     return pNud->isEnabled
 end function
 
 ' EnableWindow on BOTH windows, not a cosmetic flag. Disabling only the container would leave
-' the CTextBox itself enabled, and a programmatic SetFocus could still drop a caret into a
+' the PsTextBox itself enabled, and a programmatic SetFocus could still drop a caret into a
 ' control that looks dead. WM_ENABLE (above) does the state and color work for both calls.
-sub CNumericUpDown_SetEnabled( byval hCtrl as HWND, byval isEnabled as boolean )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetEnabled( byval hCtrl as HWND, byval isEnabled as boolean )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
 
     if pNud->hTextBox then EnableWindow( pNud->hTextBox, isEnabled )
     EnableWindow( hCtrl, isEnabled )
 end sub
 
-sub CNumericUpDown_GetAutoRepeat( byval hCtrl as HWND, byref nDelayMs as long, byref nIntervalMs as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_GetAutoRepeat( byval hCtrl as HWND, byref nDelayMs as long, byref nIntervalMs as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then
         nDelayMs = 0 : nIntervalMs = 0
         exit sub
@@ -1162,16 +1162,16 @@ sub CNumericUpDown_GetAutoRepeat( byval hCtrl as HWND, byref nDelayMs as long, b
 end sub
 
 ' Either value <= 0 disables repeating: one click = one step.
-sub CNumericUpDown_SetAutoRepeat( byval hCtrl as HWND, byval nDelayMs as long, byval nIntervalMs as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetAutoRepeat( byval hCtrl as HWND, byval nDelayMs as long, byval nIntervalMs as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->nRepeatDelayMs    = nDelayMs
     pNud->nRepeatIntervalMs = nIntervalMs
     if (nDelayMs <= 0) orelse (nIntervalMs <= 0) then NUD_StopRepeat( pNud, hCtrl )
 end sub
 
-sub CNumericUpDown_Refresh( byval hCtrl as HWND )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_Refresh( byval hCtrl as HWND )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->Refresh()
     NUD_SyncChild( pNud )
@@ -1181,33 +1181,33 @@ end sub
 ' ========================================================================================
 ' Layout
 ' ========================================================================================
-function CNumericUpDown_GetFont( byval hCtrl as HWND ) as HFONT
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetFont( byval hCtrl as HWND ) as HFONT
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->hFont
 end function
 
-' CALLER-OWNED: the control converts nothing and deletes nothing; the CTextBox turns it into
+' CALLER-OWNED: the control converts nothing and deletes nothing; the PsTextBox turns it into
 ' a CHARFORMATW internally and also never takes ownership.
-sub CNumericUpDown_SetFont( byval hCtrl as HWND, byval hFont as HFONT )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetFont( byval hCtrl as HWND, byval hFont as HFONT )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->hFont = hFont
     ' A font change re-applies the CHARFORMAT but leaves the paragraph format alone, so the
     ' centring set at Create is untouched -- and re-applying it here would be actively
     ' harmful, since doing so rewrites the buffer and drops the undo history.
-    if pNud->hTextBox then CTextBox_SetFont( pNud->hTextBox, hFont )
+    if pNud->hTextBox then PsTextBox_SetFont( pNud->hTextBox, hFont )
     pNud->Refresh()
 end sub
 
-function CNumericUpDown_GetButtonWidth( byval hCtrl as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetButtonWidth( byval hCtrl as HWND ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nButtonWidth
 end function
 
-sub CNumericUpDown_SetButtonWidth( byval hCtrl as HWND, byval nWidth as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetButtonWidth( byval hCtrl as HWND, byval nWidth as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nWidth < 0 then nWidth = 0
     pNud->nButtonWidth = nWidth
@@ -1215,8 +1215,8 @@ sub CNumericUpDown_SetButtonWidth( byval hCtrl as HWND, byval nWidth as long )
     NUD_SyncChild( pNud )
 end sub
 
-sub CNumericUpDown_GetValuePadding( byval hCtrl as HWND, byref nLeft as long, byref nRight as long, byref nVert as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_GetValuePadding( byval hCtrl as HWND, byref nLeft as long, byref nRight as long, byref nVert as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then
         nLeft = 0 : nRight = 0 : nVert = 0
         exit sub
@@ -1228,8 +1228,8 @@ end sub
 
 ' nLeft/nRight are real text margins inside the value cell (EM_SETMARGINS on the RichEdit);
 ' nVert is used ONLY by GetIdealSize, to decide the height around one line of text.
-sub CNumericUpDown_SetValuePadding( byval hCtrl as HWND, byval nLeft as long, byval nRight as long, byval nVert as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetValuePadding( byval hCtrl as HWND, byval nLeft as long, byval nRight as long, byval nVert as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nLeft < 0 then nLeft = 0
     if nRight < 0 then nRight = 0
@@ -1237,32 +1237,32 @@ sub CNumericUpDown_SetValuePadding( byval hCtrl as HWND, byval nLeft as long, by
     pNud->nValuePadLeft  = nLeft
     pNud->nValuePadRight = nRight
     pNud->nVertPadding   = nVert
-    if pNud->hTextBox then CTextBox_SetMargins( pNud->hTextBox, nLeft, nRight )
+    if pNud->hTextBox then PsTextBox_SetMargins( pNud->hTextBox, nLeft, nRight )
     pNud->Refresh()
 end sub
 
-function CNumericUpDown_GetCornerRadius( byval hCtrl as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetCornerRadius( byval hCtrl as HWND ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nCornerRadius
 end function
 
-sub CNumericUpDown_SetCornerRadius( byval hCtrl as HWND, byval nRadius as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetCornerRadius( byval hCtrl as HWND, byval nRadius as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nRadius < 0 then nRadius = 0
     pNud->nCornerRadius = nRadius
     pNud->Refresh()
 end sub
 
-function CNumericUpDown_GetBorderThickness( byval hCtrl as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetBorderThickness( byval hCtrl as HWND ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nBorderThick
 end function
 
-sub CNumericUpDown_SetBorderThickness( byval hCtrl as HWND, byval nThickness as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetBorderThickness( byval hCtrl as HWND, byval nThickness as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nThickness < 0 then nThickness = 0
     pNud->nBorderThick = nThickness
@@ -1270,14 +1270,14 @@ sub CNumericUpDown_SetBorderThickness( byval hCtrl as HWND, byval nThickness as 
     NUD_SyncChild( pNud )
 end sub
 
-function CNumericUpDown_GetDividerThickness( byval hCtrl as HWND ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_GetDividerThickness( byval hCtrl as HWND ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return 0
     return pNud->nDividerThick
 end function
 
-sub CNumericUpDown_SetDividerThickness( byval hCtrl as HWND, byval nThickness as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetDividerThickness( byval hCtrl as HWND, byval nThickness as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nThickness < 0 then nThickness = 0
     pNud->nDividerThick = nThickness
@@ -1285,8 +1285,8 @@ sub CNumericUpDown_SetDividerThickness( byval hCtrl as HWND, byval nThickness as
     NUD_SyncChild( pNud )
 end sub
 
-sub CNumericUpDown_GetGlyphSize( byval hCtrl as HWND, byref nLength as long, byref nThickness as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_GetGlyphSize( byval hCtrl as HWND, byref nLength as long, byref nThickness as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then
         nLength = 0 : nThickness = 0
         exit sub
@@ -1295,8 +1295,8 @@ sub CNumericUpDown_GetGlyphSize( byval hCtrl as HWND, byref nLength as long, byr
     nThickness = pNud->nGlyphThick
 end sub
 
-sub CNumericUpDown_SetGlyphSize( byval hCtrl as HWND, byval nLength as long, byval nThickness as long )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetGlyphSize( byval hCtrl as HWND, byval nLength as long, byval nThickness as long )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     if nLength < 1 then nLength = 1
     if nThickness < 1 then nThickness = 1
@@ -1316,9 +1316,9 @@ end sub
 ' it precisely to decide how big to make the thing. (LayoutControl, by contrast, takes no DC
 ' at all: every cell is derived from the client rect and authored scalars.)
 ' ========================================================================================
-sub CNumericUpDown_GetIdealSize( byval hCtrl as HWND, byref nWidth as long, byref nHeight as long )
+sub PsNumericUpDown_GetIdealSize( byval hCtrl as HWND, byref nWidth as long, byref nHeight as long )
     nWidth = 0 : nHeight = 0
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
 
     dim as HDC hdc = GetDC( hCtrl )
@@ -1352,7 +1352,7 @@ end sub
 ' The rect queries force a pending layout, so results are always current. FALSE means the
 ' control has no geometry yet (created but never sized).
 private function NUD_GetRect( byval hCtrl as HWND, byref rc as RECT, byval iPart as long ) as boolean
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     SetRectEmpty( @rc )
     if pNud = 0 then return false
     if pNud->bLayoutDirty then pNud->LayoutControl()
@@ -1367,24 +1367,24 @@ private function NUD_GetRect( byval hCtrl as HWND, byref rc as RECT, byval iPart
     return true
 end function
 
-function CNumericUpDown_GetFrameRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+function PsNumericUpDown_GetFrameRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
     return NUD_GetRect( hCtrl, rc, NUD_PART_NONE )
 end function
 
-function CNumericUpDown_GetMinusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+function PsNumericUpDown_GetMinusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
     return NUD_GetRect( hCtrl, rc, NUD_PART_MINUS )
 end function
 
-function CNumericUpDown_GetValueRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+function PsNumericUpDown_GetValueRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
     return NUD_GetRect( hCtrl, rc, NUD_PART_VALUE )
 end function
 
-function CNumericUpDown_GetPlusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
+function PsNumericUpDown_GetPlusRect( byval hCtrl as HWND, byref rc as RECT ) as boolean
     return NUD_GetRect( hCtrl, rc, NUD_PART_PLUS )
 end function
 
-function CNumericUpDown_HitTest( byval hCtrl as HWND, byval pt as POINT ) as long
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+function PsNumericUpDown_HitTest( byval hCtrl as HWND, byval pt as POINT ) as long
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then return NUD_PART_NONE
     return NUD_HitTestPart( pNud, pt )
 end function
@@ -1393,17 +1393,17 @@ end function
 ' ========================================================================================
 ' Appearance
 ' ========================================================================================
-sub CNumericUpDown_GetColors( byval hCtrl as HWND, byval pColors as CNUMERICUPDOWN_COLORS ptr )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_GetColors( byval hCtrl as HWND, byval pColors as PSNUMERICUPDOWN_COLORS ptr )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if (pNud = 0) orelse (pColors = 0) then exit sub
     *pColors = pNud->colors
 end sub
 
-' Copies the whole struct, then pushes the value cell's two colors into the CTextBox -- the
+' Copies the whole struct, then pushes the value cell's two colors into the PsTextBox -- the
 ' RichEdit draws the number, so those two have to live on the child even though they are
 ' authored here.
-sub CNumericUpDown_SetColors( byval hCtrl as HWND, byval pColors as CNUMERICUPDOWN_COLORS ptr )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetColors( byval hCtrl as HWND, byval pColors as PSNUMERICUPDOWN_COLORS ptr )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if (pNud = 0) orelse (pColors = 0) then exit sub
     pNud->colors = *pColors
     NUD_ApplyStateColors( pNud )
@@ -1414,21 +1414,21 @@ end sub
 ' ========================================================================================
 ' Callbacks
 ' ========================================================================================
-sub CNumericUpDown_SetPaintCallback( byval hCtrl as HWND, byval usersub as NUD_PaintCallbackSub )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetPaintCallback( byval hCtrl as HWND, byval usersub as NUD_PaintCallbackSub )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->PaintCallback = usersub
     if pNud->hWin then InvalidateRect( pNud->hWin, NULL, TRUE )
 end sub
 
-sub CNumericUpDown_SetMessageCallback( byval hCtrl as HWND, byval userfunc as NUD_MessageCallbackFunc )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetMessageCallback( byval hCtrl as HWND, byval userfunc as NUD_MessageCallbackFunc )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->MessageCallback = userfunc
 end sub
 
-sub CNumericUpDown_SetValueChangedCallback( byval hCtrl as HWND, byval usersub as NUD_ValueChangedCallbackSub )
-    dim as CNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
+sub PsNumericUpDown_SetValueChangedCallback( byval hCtrl as HWND, byval usersub as NUD_ValueChangedCallbackSub )
+    dim as PSNUMERICUPDOWN ptr pNud = GetNumericUpDownPointer(hCtrl)
     if pNud = 0 then exit sub
     pNud->ValueChangedCallback = usersub
 end sub
@@ -1438,10 +1438,10 @@ end sub
 ' Host message pump.
 '
 ' One line of forwarding, and it exists so a host adopting this control has ONE call to add
-' rather than having to know that there is a CTextBox inside it with a CPopupMenu inside
-' that. An app already calling CTextBox_FilterMessage is covered either way, and calling both
+' rather than having to know that there is a PsTextBox inside it with a PsPopupMenu inside
+' that. An app already calling PsTextBox_FilterMessage is covered either way, and calling both
 ' is harmless -- the filter finds the single open menu chain, or finds none.
 ' ========================================================================================
-function CNumericUpDown_FilterMessage( byval pMsg as MSG ptr ) as boolean
-    return CTextBox_FilterMessage( pMsg )
+function PsNumericUpDown_FilterMessage( byval pMsg as MSG ptr ) as boolean
+    return PsTextBox_FilterMessage( pMsg )
 end function

@@ -1,11 +1,11 @@
 @echo off
 rem ========================================================================================
-rem  CNumericUpDown demo build script.
+rem  PsNumericUpDown demo build script.
 rem
 rem  Usage:  build.bat          builds main.exe
 rem          build.bat clean    deletes build output
 rem
-rem  Run the geometry self-test with:  set CNUMERICUPDOWN_SELFTEST=1 && main.exe
+rem  Run the geometry self-test with:  set PSNUMERICUPDOWN_SELFTEST=1 && main.exe
 rem ========================================================================================
 
 setlocal
@@ -21,7 +21,7 @@ rem main.rc embeds main_manifest.xml as resource type 24 (RT_MANIFEST). That man
 rem makes the process DPI-AWARE. Without it Windows reports 96 DPI whatever the user's scaling
 rem is and bitmap-stretches the window -- which silently invalidates every geometry assertion
 rem measured in this control, all of which derive from a scaled font. It also pulls in
-rem Common-Controls v6, which the RichEdit inside CTextBox expects.
+rem Common-Controls v6, which the RichEdit inside PsTextBox expects.
 set RESOURCE=main.rc
 
 if /i "%~1"=="clean" (

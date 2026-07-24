@@ -4,12 +4,6 @@ An owner-drawn numeric up/down control — a spinner — for FreeBASIC Win32 app
 rounded frame holding a `−` button, an editable numeric field and a `+` button, separated by
 hairline dividers.
 
-```
-┌───┬──────────┬───┐
-│ − │  16.00   │ + │
-└───┴──────────┴───┘
-```
-
 It is the control you reach for in a settings row, where the user picks a number and either
 nudges it a step at a time or types it outright. The value has a range, a settable number of
 decimal places and a settable increment; the buttons auto-repeat while held, the arrow keys,

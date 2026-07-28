@@ -515,11 +515,15 @@ sub PsNumericUpDown_SelfTest()
         (rcMinus.top = 0) andalso (rcMinus.bottom = ch) andalso (rcPlus.top = 0) andalso (rcPlus.bottom = ch), _
         "minus=" & str(rcMinus.top) & ".." & str(rcMinus.bottom) & " ch=" & str(ch) )
 
-    ' The value cell IS deflated vertically -- the child window covers those pixels, and a
-    ' child painting over the top and bottom border rows would interrupt the frame.
-    SelfTest_Check( "the value cell is inset vertically by the border, so the child cannot cover it", _
-        (rcValue.top = bt) andalso (rcValue.bottom = ch - bt), _
-        "value=" & str(rcValue.top) & ".." & str(rcValue.bottom) & " border=" & str(bt) )
+    ' The value cell IS deflated vertically -- the child window covers those pixels. The inset
+    ' is the border (so the child cannot cover the frame's rows) PLUS nVertPadding (DPI-scaled
+    ' clearance, so the borderless RichEdit's full-height line does not clip against the frame).
+    ' At this comfortable height the padding fits, so the fallback branch is not exercised.
+    dim as long vpL, vpR, vpV
+    PsNumericUpDown_GetValuePadding( h, vpL, vpR, vpV )
+    SelfTest_Check( "the value cell is inset vertically by border + vertical padding, clearing the child of the frame", _
+        (rcValue.top = bt + vpV) andalso (rcValue.bottom = ch - bt - vpV), _
+        "value=" & str(rcValue.top) & ".." & str(rcValue.bottom) & " border=" & str(bt) & " vpad=" & str(vpV) )
 
     SelfTest_Check( "the value cell sits exactly between the two dividers", _
         (rcValue.left = rcMinus.right + dt) andalso (rcValue.right = rcPlus.left - dt), _

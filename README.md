@@ -788,3 +788,17 @@ here, but it is the reason `PsNumericUpDown_FilterMessage` has to be in your pum
 **`PsBufferPaint`** is the drawing surface this control — and any paint callback you write —
 renders through. Its primitives (`PaintRoundRect`, `PaintRoundOutline`, `PaintRect`,
 `SetBackColor`, `SetPenColor`) are what a callback has to work with.
+
+## Licence
+
+[Mozilla Public License 2.0](LICENSE).
+
+MPL-2.0 is file-level copyleft, chosen deliberately for a drop-in control:
+
+- **You may use this in closed-source software**, commercial or otherwise.
+  §3.2 permits static linking with no additional conditions.
+- **If you modify these files, publish those files' changes.** The obligation is
+  per-file — your own sources are unaffected however tightly they are combined
+  with these.
+- The Exhibit B "Incompatible With Secondary Licenses" notice is **not applied**,
+  which keeps this GPL-compatible.
